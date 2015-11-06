@@ -3,7 +3,6 @@
 #include <stdio.h>
 
 int main(int argc, char* argv[]) {
-
     /**
      * NOTE:
      * When creating a special token list, make sure to put tokens which are subsets of larger tokens at the top

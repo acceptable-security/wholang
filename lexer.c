@@ -126,6 +126,18 @@ token_t* lexer_nextif(lexer_state_t* lex, token_types_t tokentype) {
     return NULL;
 }
 
+token_t* lexer_nextif_special(lexer_state_t* lex, const char* token) {
+    if ( lex->error ) return NULL;
+
+    if ( lexer_matches(lex, special_token) ) {
+        if ( strcmp((char*) lexer_cur(lex)->value, token) == 0 ) {
+            return lexer_next(lex);
+        }
+    }
+
+    return NULL;
+}
+
 token_t* lexer_expect(lexer_state_t* lex, token_types_t tokentype) {
     if ( lex->error ) return NULL;
 
@@ -133,6 +145,36 @@ token_t* lexer_expect(lexer_state_t* lex, token_types_t tokentype) {
 
     if ( tok == NULL ) {
         lexer_error(lex, "Expected %s token.\n", token_names[tokentype]);
+    }
+
+    return tok;
+}
+
+token_t* lexer_expect_special(lexer_state_t* lex, const char* token) {
+    if ( lex->error ) return NULL;
+
+    token_t* tok = lexer_nextif(lex, special_token);
+
+    if ( tok == NULL ) {
+        lexer_error(lex, "Expected \"%s\" token.\n", token);
+    }
+    else if ( strcmp((char*) tok->value, token) != 0 ) {
+        lexer_error(lex, "Expected a \"%s\", got a \"%s\"\n", token, (char*) tok->value);
+    }
+
+    return tok;
+}
+
+token_t* lexer_expectmatch(lexer_state_t* lex, const char* end, const char* start, int linenum) {
+    if ( lex->error ) return NULL;
+
+    token_t* tok = lexer_nextif(lex, special_token);
+
+    if ( tok == NULL ) {
+        lexer_error(lex, "Expected \"%s\" token to match the \"%s\" on line %d.\n", end, start, linenum);
+    }
+    else if ( strcmp((char*) tok->value, end) != 0 ) {
+        lexer_error(lex, "Expected a \"%s\" token to match the \"%s\" on line %d. Got a \"%s\"\n", end, start, linenum, (char*) tok->value);
     }
 
     return tok;
