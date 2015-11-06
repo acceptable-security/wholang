@@ -12,11 +12,18 @@ typedef enum {
 typedef struct _token {
     token_types_t type;
     void* value;
+    int lineNumber;
+    int lineIndex;
 } token_t;
 
 typedef struct {
+    bool error;
+
     token_t* current;
     token_t* next;
+
+    const char** specialTokens;
+    unsigned int specialTokenLength;
 
     const char* source;
     unsigned int tokenIndex;
@@ -26,12 +33,12 @@ typedef struct {
     unsigned int _sourceLen;
 } lexer_state_t;
 
-token_t* token_init(token_types_t type);
+token_t* token_init(token_types_t type, int lineNumber, int lineIndex, void* data);
 void token_debug(token_t* token);
 void token_clean(token_t* token);
 
-lexer_state_t* lexer_init(const char* src);
-void lexer_error(lexer_state_t* lex, const char* error);
+lexer_state_t* lexer_init(const char* src, const char* specialTokens[]);
+void lexer_error(lexer_state_t* lex, const char* error, ...);
 void lexer_debug(lexer_state_t* lex);
 void lexer_clean(lexer_state_t* lex);
 

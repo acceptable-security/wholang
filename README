@@ -1,2 +1,5 @@
 # wholang
 My experiments in lexing, compiling, and assembling.
+
+## Building
+    gcc lexer.c tester.c
