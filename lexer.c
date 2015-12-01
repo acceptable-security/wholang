@@ -26,6 +26,10 @@ token_t* token_init(token_types_t type, int lineNumber, int lineIndex, void* dat
 }
 
 void token_debug(token_t* token) {
+    if ( token == NULL ) {
+        return;
+    }
+
     switch ( token->type ) {
         case name_token:
             printf("[%d:%d] NAME_TOKEN %s\n", token->lineNumber, token->lineIndex, (char*)token->value);
@@ -49,7 +53,11 @@ void token_debug(token_t* token) {
 }
 
 void token_clean(token_t* token) {
-    if ( token->type != int_token && token->type != eof_token )
+    if ( token == NULL ) {
+        return;
+    }
+
+    if ( token->type != eof_token )
         free(token->value);
 
     free(token);
@@ -91,19 +99,42 @@ token_t* lexer_lookahead(lexer_state_t* lex) {
 }
 
 bool lexer_matches(lexer_state_t* lex, token_types_t tokentype) {
-    if ( lex->error ) return NULL;
+    if ( lex->error || lexer_cur(lex) == NULL ) return NULL;
+
+    return lexer_cur(lex)->type == tokentype;
+}
+
+bool lexer_matches_special(lexer_state_t* lex, const char* special) {
+    if ( lex->error || lexer_cur(lex) == NULL ) return NULL;
+
+    token_t* token = lexer_lookahead(lex);
+
+    if ( token->type == special_token ) {
+        return strcmp((char*) token->value, special) == 0;
+    }
+
+    return false;
+}
+
+bool lexer_lookahead_matches(lexer_state_t* lex, token_types_t tokentype) {
+    if ( lex->error || lexer_lookahead(lex) == NULL ) return NULL;
 
     return lexer_lookahead(lex)->type == tokentype;
 }
 
-bool lexer_lookaheadmatches(lexer_state_t* lex, token_types_t tokentype) {
-    if ( lex->error ) return NULL;
+bool lexer_lookahead_matches_special(lexer_state_t* lex, const char* special) {
+    if ( lex->error || lexer_lookahead(lex) == NULL ) return NULL;
 
-    return lexer_lookahead(lex)->type == tokentype;
+    token_t* token = lexer_lookahead(lex);
+
+    if ( token->type == special_token ) {
+        return strcmp((char*) token->value, special) == 0;
+    }
+
+    return false;
 }
 
 token_t* lexer_next(lexer_state_t* lex) {
-
     token_t* c = lex->current;
 
     lex->current = lex->next;
@@ -313,15 +344,17 @@ token_t* _lexer_read_token(lexer_state_t* lex) {
             lex->sourceIndex += index;
             lex->lineIndex += index;
 
-            int val = atol(str);
+            int* v = (int*) malloc(sizeof(int));
+            *v = atol(str);
 
-            token_t* token = token_init(int_token, lex->lineNumber, lex->lineIndex, (void*) &val);
+            token_t* token = token_init(int_token, lex->lineNumber, lex->lineIndex, (void*) v);
 
             free(str);
             return token;
         }
     }
-    else if ( (current >= 'a' && current <= 'z') || (current >= 'A' && current <= 'Z') ) {
+    else if ( (current >= 'a' && current <= 'z') || (current >= 'A' && current <= 'Z') ||
+              (current >= '0' && current <= '9') || (current == '_')) {
         unsigned int currAlloc = MALLOC_CHUNK;
         char* str = (char*) malloc(currAlloc * sizeof(char));
         str[0] = current;
@@ -331,7 +364,8 @@ token_t* _lexer_read_token(lexer_state_t* lex) {
         current = lex->source[lex->sourceIndex + index];
 
         while ( ((current >= 'a' && current <= 'z') || (current >= 'A' && current <= 'Z') ||
-                (current >= '0' && current <= '9')) && (lex->sourceIndex + index) < lex->_sourceLen ) {
+                 (current >= '0' && current <= '9') || (current == '_' || current == '-')) &&
+                 (lex->sourceIndex + index) < lex->_sourceLen ) {
             if ( index >= (currAlloc - 1) ) {
                 currAlloc += MALLOC_CHUNK;
                 char* temp = (char*) realloc(str, currAlloc);
@@ -449,9 +483,9 @@ token_t* _lexer_read_token(lexer_state_t* lex) {
         for ( int i = 0; i < lex->specialTokenLength; i++ ) {
             bool good = true;
 
-            if ( lex->specialTokens[i][0] == current ) {
-                for ( int j = lex->sourceIndex; j < strlen(lex->specialTokens[i]); j++ ) {
-                    if ( lex->specialTokens[i][j - lex->sourceIndex] != lex->source[j] ) {
+            if ( lex->specialTokens[i] != NULL && lex->specialTokens[i][0] == current ) {
+                for ( int j = 0; j < strlen(lex->specialTokens[i]); j++ ) {
+                    if ( lex->specialTokens[i][j] != lex->source[j + lex->sourceIndex] ) {
                         good = false;
                         break;
                     }

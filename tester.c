@@ -1,8 +1,8 @@
-#include "lexer.h"
+#include "parser.h"
 #include <stdlib.h>
 #include <stdio.h>
 
-int main(int argc, char* argv[]) {
+void test_lexer() {
     /**
      * NOTE:
      * When creating a special token list, make sure to put tokens which are subsets of larger tokens at the top
@@ -31,6 +31,7 @@ int main(int argc, char* argv[]) {
         "*",
         ";",
         ":",
+        ",",
         NULL
     };
 
@@ -45,6 +46,29 @@ int main(int argc, char* argv[]) {
     }
 
     lexer_clean(lex);
+}
+
+void test_expr() {
+    parser_state_t* parser = parser_init("1 + 2");
+    expr_t* expr = parser_read_expr(parser, 0);
+
+    expr_debug(expr);
+
+    printf("\n");
+
+    expr_clean(expr);
+    lexer_clean(parser->lex);
+    free(parser);
+}
+
+int main(int argc, char* argv[]) {
+    parser_state_t* parser = parser_init("fn test() { void(); var wew = test;}");
+    function_t* fn = parser_read_function(parser);
+    function_debug(fn);
+
+    function_clean(fn);
+    lexer_clean(parser->lex);
+    free(parser);
 
     return 0;
 }
