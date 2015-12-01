@@ -28,32 +28,41 @@ Right now the API for the lexer is undocumented, but here's a wonderful copy and
 That's helpful, right?
 
 ## Parser
-Right now this is undeveloped, and I plan on doing this part last, as it will be the past that will least applicable to
-other projects. If all goes as well as it could, the end result will be something that can be used to create other
-languages too.
+Well. It's a little scary. Here's the API. Uses a weird/hackish Pratt Parser in order to do expression parsing, which
+I guess works but is a bit of a hack.
 
-## Program State
-The program state doesn't really exist right now, but the way it's planned to be is a nice interface inbetween the
-assembler and the parser, presenting a nice interface to generate assembly which could also be useful when extending to
-other platforms. The theoretical API that's been formed:
+    parser_state_t* parser_init(const char* src);
 
-    program_state_t program = program_init();
-    int globalref = program_create_global_variable(program, size, type); // Create a global variable
-    program_set_variable(program, globalref, value); // Set the global variable's data type.
-    int func = program_create_function(program); // Create a function
-    int varref = program_create_variable(program, func, size, type); // Create a variable in the function
-    program_call_function(program, func, program_get_function("default"), variable1); // Call a library function, program_get_function could be replaced by just passing it a function reference.
-    program_function_return(program, varref); // Return the variable varref.
+    expr_t* parser_read_expr(parser_state_t* parser, int pres);
+    void expr_debug(expr_t* expr);
+    void expr_clean(expr_t* expr);
 
-As one could see, it is all very up in the air. It is still undecided whether or not the program state should also keep
-track of function names and variable names.
+    stmt_t* parser_read_stmt(parser_state_t* parser);
+    void stmt_debug(stmt_t* stmt);
+    void stmt_clean(stmt_t* stmt);
+
+    block_t* parser_read_block(parser_state_t* parser);
+    void block_debug(block_t* block);
+    void block_clean(block_t* block);
+
+    function_t* parser_read_function(parser_state_t* parser);
+    void function_debug(function_t* fn);
+    void function_clean(function_t* fn);
+
+    void parser_read(parser_state_t* parser);
+
+## Compiler
+This is next.
 
 ## Assembler
-For now I think it'd be cleaner and more reliable to just use something like GAS or NASM, just so the language's progress
-isn't halted by something that already exists. Of course, in the future, it would certainly be a neat addition
+Then this.
 
 ## Linker
-See above. Just use LD for now.
+UUUUUUUUGH
 
 ## Building
-    gcc lexer.c tester.c
+    gcc lexer.c parser.c tester.c
+
+## Pull Requests
+If you some how have managed to obtain so much time you can waste as to want to contribute to this project, please run
+valgrind on any builds and make sure that there are no memleaks. This is C afterall.
