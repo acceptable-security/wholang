@@ -300,4 +300,7 @@ void block_debug(block_t* block);
 void block_clean(block_t* block);
 
 function_t* parser_read_function(parser_state_t* parser);
+void function_debug(function_t* fn);
+void function_clean(function_t* fn);
+
 void parser_read(parser_state_t* parser);

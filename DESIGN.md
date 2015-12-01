@@ -6,8 +6,8 @@ it is a well established and widely documented language, but the fact that it do
 No garbage collection, no (actual) OOP, none of that fancy shit that C++ was ruined with. My rule of thumb is if I can't
 make a x86 kernel with the language and some assembly, it's fucking useless. However, I would like to try to implement
 some nice syntax sugar that has come up from other languages. If some of these features seem like they come from other
-languages, that's because they do, and I thought they looked pretty and wanted them. I guess that makes this a langauge
-a frankenstein of others.
+languages, that's because they do, and I thought they looked pretty and wanted them. I guess that makes this a language
+a frankenstein of others. Except frankenstein is a shit word. Let's call it a pretty quilt of other languages :).
 
 ## Design
 Please note that all of this is completely open to change and that if someone thinks of a better idea, then we'll
