@@ -62,11 +62,11 @@ void test_expr() {
 }
 
 int main(int argc, char* argv[]) {
-    parser_state_t* parser = parser_init("fn test() { void(); var wew = test;}");
-    function_t* fn = parser_read_function(parser);
-    function_debug(fn);
+    parser_state_t* parser = parser_init("struct justatest { test : test; };");
+    struct_t* fn = parser_read_struct(parser);
+    struct_debug(fn);
 
-    function_clean(fn);
+    struct_clean(fn);
     lexer_clean(parser->lex);
     free(parser);
 

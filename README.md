@@ -4,7 +4,7 @@ My experiments in lexing, compiling, and assembling.
 ## Pipeline
 The way I've been designing it, the parts of this should at the end look something like
 
-    lexer -> parser -> program state -> assembler -> linker
+    lexer -> parser -> compiler -> assembler -> linker
 
 ## Lexer
 Right now the API for the lexer is undocumented, but here's a wonderful copy and paste from the header file.

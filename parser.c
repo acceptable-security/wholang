@@ -62,6 +62,7 @@ parser_state_t* parser_init(const char* src) {
         "while",
         "for",
         "return",
+        "struct",
         "#",
         NULL
     };
@@ -1236,6 +1237,204 @@ function_t* parser_read_function(parser_state_t* parser) {
     // We don't clean up blocks, because the only instance where we go to error around blocks is if blocks are errors
 
     return NULL;
+}
+
+void struct_debug(struct_t* strc) {
+    if ( strc == NULL ) {
+        return;
+    }
+
+    if ( strc->name )
+        printf("struct %s {\n", strc->name);
+    else
+        printf("struct {\n");
+
+    for ( int i = 0; i < strc->len; i++ ) {
+        printf("%s : %s\n", strc->args[i]->name, strc->args[i]->type);
+    }
+
+    printf("};\n");
+}
+
+void struct_clean(struct_t* strc) {
+    if ( strc != NULL ) {
+        if ( strc->name != NULL ) {
+            free((void*) strc->name);
+        }
+
+        if ( strc->args != NULL ) {
+            for ( int i = 0; i < strc->len; i++ ) {
+                // This shouldn't ever happen
+                // But you can never be too safe :)
+                if ( strc->args[i] != NULL ) {
+                    if ( strc->args[i]->name != NULL ) {
+                        free((void*) strc->args[i]->name);
+                    }
+
+                    if ( strc->args[i]->type != NULL ) {
+                        free((void*) strc->args[i]->type);
+                    }
+
+                    free(strc->args[i]);
+                }
+            }
+
+            free(strc->args);
+        }
+
+        free(strc);
+    }
+}
+
+struct_t* parser_read_struct(parser_state_t* parser) {
+    struct_t* strc = NULL;
+
+    MUST_BE(parser->lex, "struct", {})
+
+    strc = (struct_t*) malloc(sizeof(struct_t));
+
+    if ( strc == NULL ) {
+        goto error;
+    }
+
+    strc->len = 0;
+    strc->alloc = MALLOC_CHUNK;
+    strc->name = NULL;
+    strc->args = INIT_LIST(function_arg_t);
+
+    token_t* cur = lexer_nextif(parser->lex, name_token);
+
+    if ( parser->lex->error ) {
+        goto error;
+    }
+
+    if ( cur != NULL ) {
+        strc->name = strdup(cur->value);
+
+        token_clean(cur);
+
+        if ( strc->name == NULL ) {
+            goto error;
+        }
+    }
+    else {
+        strc->name = NULL;
+    }
+
+
+    MUST_BE(parser->lex, "{", {})
+
+    while ( !(IF_NEXT(parser->lex, "}", cur)) ) {
+        char* name;
+        char* type;
+
+        NEXT_NAME(parser->lex, name)
+        MUST_BE(parser->lex, ":", {
+            free(name);
+        })
+        NEXT_NAME(parser->lex, type)
+
+        if ( name == NULL ) {
+            if ( type != NULL ) {
+                free(type);
+            }
+
+            goto error;
+        }
+
+        if ( type == NULL ) {
+            if ( name != NULL ) {
+                free(name);
+            }
+
+            goto error;
+        }
+
+        function_arg_t* arg = (function_arg_t*) malloc(sizeof(function_arg_t));
+
+        if ( arg == NULL ) {
+            free(name);
+            free(type);
+            lexer_error(parser->lex, "Unable to allocate enough memory for a function argument.\n");
+            goto error;
+        }
+
+        arg->name = name;
+        arg->type = type;
+
+        ADD_ARG(strc->args, strc->len, strc->alloc, arg, {
+            if ( arg->name ) free((void*) arg->name);
+            if ( arg->type ) free((void*) arg->type);
+            free(arg);
+        })
+
+        MUST_BE(parser->lex, ";", {})
+    }
+
+    token_clean(cur);
+
+    if ( IF_NEXT(parser->lex, ":", cur) ) {
+        char* tmp = strdup(cur->value);
+
+        token_clean(cur);
+
+        if ( tmp == NULL ) {
+            goto error;
+        }
+
+        if ( parser_typedef(parser, tmp, strc, struct_typedef) == -1 ) {
+            goto error;
+        }
+    }
+
+    MUST_BE(parser->lex, ";", {})
+
+    return strc;
+
+    error:
+
+    // typedef will be cleaned on parser cleanup
+
+    struct_clean(strc);
+
+    return NULL;
+}
+
+int parser_typedef(parser_state_t* parser, const char* name, void* data, typedef_type_t type) {
+    if ( parser->typedefs == NULL ) {
+        parser->typedef_len = 0;
+        parser->typedef_alloc = MALLOC_CHUNK;
+        parser->typedefs = INIT_LIST(typedef_t);
+    }
+
+    for ( int i = 0; i < parser->typedef_len; i++ ) {
+        if ( parser->typedefs[i] != NULL ) {
+            if ( strcmp(parser->typedefs[i]->name, name) == 0 ) {
+                lexer_error(parser->lex, "Unable to redefine typedef \"%s\"", name);
+                goto error;
+            }
+        }
+    }
+
+    typedef_t* def = (typedef_t*) malloc(sizeof(typedef_t));
+
+    if ( def == NULL ) {
+        lexer_error(parser->lex, "Unable to allocate enough space for a typedef\n");
+        goto error;
+    }
+
+    def->name = name;
+    def->data = data;
+    def->type = type;
+
+    ADD_ARG(parser->typedefs, parser->typedef_len, parser->typedef_alloc, def, {
+        lexer_error(parser->lex, "Unable to allocate enough space for the typedef list to grow to include %s\n", name);
+    })
+
+    return 1;
+
+    error:
+    return -1;
 }
 
 void parser_read(parser_state_t* parser) {

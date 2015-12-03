@@ -276,13 +276,42 @@ typedef struct {
     unsigned int alloc;
 } function_t;
 
+typedef struct {
+    function_arg_t** args;
+    unsigned int len;
+    unsigned int alloc;
+
+    const char* name;
+} struct_t;
+
+typedef enum {
+    vardec_typedef,
+    struct_typedef
+} typedef_type_t;
+
+typedef struct {
+    const char* name;
+    void* data;
+    typedef_type_t type;
+} typedef_t;
+
 // Parser Information
 
 typedef struct {
     const char* src;
     lexer_state_t* lex;
 
-    void* current;
+    function_t** functions;
+    unsigned int fn_len;
+    unsigned int fn_alloc;
+
+    struct_t** structs;
+    unsigned int strc_len;
+    unsigned int strc_alloc;
+
+    typedef_t** typedefs;
+    unsigned int typedef_len;
+    unsigned int typedef_alloc;
 } parser_state_t;
 
 parser_state_t* parser_init(const char* src);
@@ -302,5 +331,11 @@ void block_clean(block_t* block);
 function_t* parser_read_function(parser_state_t* parser);
 void function_debug(function_t* fn);
 void function_clean(function_t* fn);
+
+struct_t* parser_read_struct(parser_state_t* parser);
+void struct_debug(struct_t* strc);
+void struct_clean(struct_t* strc);
+
+int parser_typedef(parser_state_t* parser, const char* name, void* data, typedef_type_t type);
 
 void parser_read(parser_state_t* parser);
