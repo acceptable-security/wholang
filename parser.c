@@ -144,6 +144,9 @@ void expr_debug(expr_t* expr) {
 
         printf(")");
     }
+    else if ( expr->type == expr_fn ) {
+        function_debug((function_t*) expr->value);
+    }
 }
 
 void expr_clean(expr_t* expr) {
@@ -191,6 +194,11 @@ void expr_clean(expr_t* expr) {
         free(call->args);
         free((void*) call->name);
         free(expr->value);
+    }
+    else if ( expr->type == expr_fn ) {
+        DEBUG("CLEAN FN", DBG_CLN)
+
+        function_clean((function_t*) expr->value);
     }
     else {
         DEBUG("CLEAN VALUE", DBG_CLN)
@@ -249,6 +257,14 @@ expr_t* parser_read_expr(parser_state_t* parser, int pres) {
             MUST_BE(parser->lex, ")", {
                 expr_clean(left->value);
             })
+        }
+        else if ( strcmp(cur->value, "fn") == 0 ) {
+            left->value = parser_read_function(parser, true);
+            left->type = expr_fn;
+
+            if ( left->value == NULL ) {
+                goto error;
+            }
         }
         else {
             expr_token_t info = _expr_token_info(cur->value, 0);
@@ -1072,7 +1088,10 @@ void function_debug(function_t* fn) {
         return;
     }
 
-    printf("fn %s(", fn->name);
+    if ( fn->name )
+        printf("fn %s(", fn->name);
+    else
+        printf("fn (");
 
     for ( int i = 0; i < fn->len; i++ ) {
         printf("%s : %s", fn->args[i]->name, fn->args[i]->type);
@@ -1122,7 +1141,7 @@ void function_clean(function_t* fn) {
     free(fn);
 }
 
-function_t* parser_read_function(parser_state_t* parser) {
+function_t* parser_read_function(parser_state_t* parser, bool anonymous) {
     token_t* cur = lexer_expect_special(parser->lex, "fn");
 
     if ( cur == NULL || parser->lex->error ) {
@@ -1149,7 +1168,12 @@ function_t* parser_read_function(parser_state_t* parser) {
         goto error;
     }
 
-    NEXT_NAME(parser->lex, fn->name)
+    if ( anonymous ) {
+        fn->name = NULL;
+    }
+    else {
+        NEXT_NAME(parser->lex, fn->name)
+    }
 
     MUST_BE(parser->lex, "(", {})
 
@@ -1468,7 +1492,7 @@ void parser_read(parser_state_t* parser) {
 
     while ( cur != NULL && cur->type != eof_token ) {
         if ( lexer_matches_special(parser->lex, "fn") ) {
-            function_t* fn = parser_read_function(parser);
+            function_t* fn = parser_read_function(parser, false);
 
             if ( fn == NULL ) {
                 goto error;
@@ -1533,6 +1557,7 @@ void parser_read(parser_state_t* parser) {
         }
 
         free(parser->functions);
+        parser->functions = NULL;
     }
 
     if ( parser->structs != NULL ) {
@@ -1543,6 +1568,7 @@ void parser_read(parser_state_t* parser) {
         }
 
         free(parser->structs);
+        parser->structs = NULL;
     }
 
     return;
