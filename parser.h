@@ -300,6 +300,7 @@ typedef struct {
 typedef struct {
     const char* src;
     lexer_state_t* lex;
+    bool error;
 
     function_t** functions;
     unsigned int fn_len;
@@ -315,6 +316,9 @@ typedef struct {
 } parser_state_t;
 
 parser_state_t* parser_init(const char* src);
+void parser_debug(parser_state_t* parser);
+void parser_read(parser_state_t* parser);
+void parser_clean(parser_state_t* parser);
 
 expr_t* parser_read_expr(parser_state_t* parser, int pres);
 void expr_debug(expr_t* expr);
@@ -337,5 +341,3 @@ void struct_debug(struct_t* strc);
 void struct_clean(struct_t* strc);
 
 int parser_typedef(parser_state_t* parser, const char* name, void* data, typedef_type_t type);
-
-void parser_read(parser_state_t* parser);

@@ -107,7 +107,7 @@ bool lexer_matches(lexer_state_t* lex, token_types_t tokentype) {
 bool lexer_matches_special(lexer_state_t* lex, const char* special) {
     if ( lex->error || lexer_cur(lex) == NULL ) return NULL;
 
-    token_t* token = lexer_lookahead(lex);
+    token_t* token = lexer_cur(lex);
 
     if ( token->type == special_token ) {
         return strcmp((char*) token->value, special) == 0;

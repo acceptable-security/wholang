@@ -62,13 +62,45 @@ void test_expr() {
 }
 
 int main(int argc, char* argv[]) {
-    parser_state_t* parser = parser_init("struct justatest { test : test; };");
-    struct_t* fn = parser_read_struct(parser);
-    struct_debug(fn);
+    if ( argc != 2 ) {
+        printf("Usage: %s filename\n", argv[0]);
+        return -1;
+    }
 
-    struct_clean(fn);
-    lexer_clean(parser->lex);
-    free(parser);
+    char* buffer = 0;
+    long length;
+    FILE* file = fopen(argv[1], "r");
+
+    if ( file ) {
+        fseek(file, 0, SEEK_END);
+        length = ftell(file);
+        fseek(file, 0, SEEK_SET);
+        buffer = malloc((length + 1) * sizeof(char));
+
+        if ( buffer ) {
+            fread(buffer, 1, length, file);
+        }
+        else {
+            fclose(file);
+            printf("Unable to allocate enough space for %s\n", argv[1]);
+            return -1;
+        }
+
+        buffer[length] = 0;
+
+        fclose(file);
+    }
+    else  {
+        printf("Unable to open %s\n", argv[1]);
+        return -1;
+    }
+
+    parser_state_t* parser = parser_init(buffer);
+    parser_read(parser);
+    parser_debug(parser);
+    parser_clean(parser);
+
+    free(buffer);
 
     return 0;
 }

@@ -69,6 +69,19 @@ parser_state_t* parser_init(const char* src) {
 
     parser->src = src;
     parser->lex = lexer_init(src, specialToken);
+    parser->error = false;
+
+    parser->typedef_len = 0;
+    parser->typedef_alloc = MALLOC_CHUNK;
+    parser->typedefs = INIT_LIST(typedef_t);
+
+    parser->fn_len = 0;
+    parser->fn_alloc = MALLOC_CHUNK;
+    parser->functions = INIT_LIST(function_t);
+
+    parser->strc_len = 0;
+    parser->strc_alloc = MALLOC_CHUNK;
+    parser->structs = INIT_LIST(struct_t);
 
     return parser;
 }
@@ -1402,9 +1415,7 @@ struct_t* parser_read_struct(parser_state_t* parser) {
 
 int parser_typedef(parser_state_t* parser, const char* name, void* data, typedef_type_t type) {
     if ( parser->typedefs == NULL ) {
-        parser->typedef_len = 0;
-        parser->typedef_alloc = MALLOC_CHUNK;
-        parser->typedefs = INIT_LIST(typedef_t);
+        return -1;
     }
 
     for ( int i = 0; i < parser->typedef_len; i++ ) {
@@ -1437,49 +1448,147 @@ int parser_typedef(parser_state_t* parser, const char* name, void* data, typedef
     return -1;
 }
 
+void parser_debug(parser_state_t* parser) {
+    if ( parser == NULL || parser->error ) {
+        return;
+    }
+
+    for ( int i = 0; i < parser->fn_len; i++ ) {
+        function_debug(parser->functions[i]);
+    }
+
+    for ( int i = 0; i < parser->strc_len; i++ ) {
+        struct_debug(parser->structs[i]);
+    }
+}
+
 void parser_read(parser_state_t* parser) {
-    token_t* cur;
+    if ( parser->error ) return;
+    token_t* cur = lexer_cur(parser->lex);
 
-    if ( lexer_matches_special(parser->lex, "fn") ) {
-        function_t* fn = parser_read_function(parser);
+    while ( cur != NULL && cur->type != eof_token ) {
+        if ( lexer_matches_special(parser->lex, "fn") ) {
+            function_t* fn = parser_read_function(parser);
 
-        if ( fn == NULL ) {
-            goto error;
+            if ( fn == NULL ) {
+                goto error;
+            }
+
+            ADD_ARG(parser->functions, parser->fn_len, parser->fn_alloc, fn, {
+                function_clean(fn);
+            })
         }
+        else if ( lexer_matches_special(parser->lex, "struct") ) {
+            struct_t* strc = parser_read_struct(parser);
 
-        // do something
-        // :^)
-    }
-    else if ( lexer_matches_special(parser->lex, "var") )  {
-        // variable declaration
-    }
-    else if ( IF_NEXT(parser->lex, "#", cur) ) {
-        token_clean(cur);
-        cur = NULL;
+            if ( strc == NULL ) {
+                goto error;
+            }
 
-        if ( IF_NEXT(parser->lex, "include", cur) ) {
+            ADD_ARG(parser->structs, parser->strc_len, parser->strc_alloc, strc, {
+                struct_clean(strc);
+            })
+        }
+        else if ( lexer_matches_special(parser->lex, "var") )  {
+            // variable declaration
+        }
+        else if ( IF_NEXT(parser->lex, "#", cur) ) {
             token_clean(cur);
             cur = NULL;
 
-            if ( lexer_matches_special(parser->lex, "\"") ) {
-                // include a file
-            }
-            else if ( lexer_matches_special(parser->lex, "<") ) {
-                // include a global file
-            }
-            else {
-                goto error;
+            if ( IF_NEXT(parser->lex, "include", cur) ) {
+                token_clean(cur);
+                cur = NULL;
+
+                if ( lexer_matches_special(parser->lex, "\"") ) {
+                    // include a file
+                }
+                else if ( lexer_matches_special(parser->lex, "<") ) {
+                    // include a global file
+                }
+                else {
+                    goto error;
+                }
             }
         }
-    }
-    else if ( lexer_matches_special(parser->lex, "//") ) {
-        // comment
-    }
-    else if ( lexer_matches_special(parser->lex, "/*") ) {
-        // comment
+        else if ( lexer_matches_special(parser->lex, "//") ) {
+            // comment
+        }
+        else if ( lexer_matches_special(parser->lex, "/*") ) {
+            // comment
+        }
+
+        cur = lexer_cur(parser->lex);
     }
 
-    error:
-    lexer_clean(parser->lex);
     return;
+    error:
+    parser->error = true;
+
+    if ( parser->functions != NULL ) {
+        for ( int i = 0; i < parser->fn_len; i++ ) {
+            if ( parser->functions[i] != NULL ) {
+                function_clean(parser->functions[i]);
+            }
+        }
+
+        free(parser->functions);
+    }
+
+    if ( parser->structs != NULL ) {
+        for ( int i = 0; i < parser->strc_len; i++ ) {
+            if ( parser->structs[i] != NULL ) {
+                struct_clean(parser->structs[i]);
+            }
+        }
+
+        free(parser->structs);
+    }
+
+    return;
+}
+
+void parser_clean(parser_state_t* parser) {
+    if ( parser == NULL ) {
+        return;
+    }
+
+    if ( parser->lex != NULL )  {
+        lexer_clean(parser->lex);
+    }
+
+    if ( parser->functions != NULL ) {
+        for ( int i = 0; i < parser->fn_len; i++ ) {
+            if ( parser->functions[i] != NULL ) {
+                function_clean(parser->functions[i]);
+            }
+        }
+
+        free(parser->functions);
+    }
+
+    if ( parser->structs != NULL ) {
+        for ( int i = 0; i < parser->strc_len; i++ ) {
+            if ( parser->structs[i] != NULL ) {
+                struct_clean(parser->structs[i]);
+            }
+        }
+
+        free(parser->structs);
+    }
+
+    if ( parser->typedefs != NULL ) {
+        for ( int i = 0; i < parser->typedef_len; i++ ) {
+            if ( parser->typedefs[i]->type == struct_typedef ) {
+                struct_clean(parser->typedefs[i]->data);
+            }
+
+            free((void*) parser->typedefs[i]->name);
+            free(parser->typedefs[i]);
+        }
+
+        free(parser->typedefs);
+    }
+
+    free(parser);
 }

@@ -1,0 +1,3 @@
+fn blah() : int {
+    return -1;
+}
