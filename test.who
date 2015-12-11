@@ -1,5 +1,5 @@
 fn blah() : int {
     return fn() {
         test();
-    }
+    };
 }
