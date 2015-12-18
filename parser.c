@@ -144,6 +144,12 @@ void expr_debug(expr_t* expr) {
 
         printf(")");
     }
+    else if ( expr->type == expr_cast ) {
+        expr_cast_t* cast = expr->value;
+
+        printf("(%s) ", cast->type);
+        expr_debug(cast->rhs);
+    }
     else if ( expr->type == expr_fn ) {
         function_debug((function_t*) expr->value);
     }
@@ -199,6 +205,14 @@ void expr_clean(expr_t* expr) {
         DEBUG("CLEAN FN", DBG_CLN)
 
         function_clean((function_t*) expr->value);
+    }
+    else if ( expr->type == expr_cast ) {
+        expr_cast_t* cast = (expr_cast_t*) expr->value;
+
+        if ( cast->type ) free(cast->type);
+        if ( cast->rhs ) expr_clean(cast->rhs);
+
+        free(cast);
     }
     else {
         DEBUG("CLEAN VALUE", DBG_CLN)
@@ -257,6 +271,24 @@ expr_t* parser_read_expr(parser_state_t* parser, int pres) {
             MUST_BE(parser->lex, ")", {
                 expr_clean(left->value);
             })
+
+            if ( ((expr_t*) left->value)->type == expr_name ) {
+                left->type = expr_cast;
+
+                expr_cast_t* cast = (expr_cast_t*) malloc(sizeof(expr_cast_t));
+
+                if ( cast == NULL ) {
+                    expr_clean((expr_t*) left->value);
+                    left->value = NULL;
+                    goto error;
+                }
+
+                cast->type = (char*) ((expr_t*) left->value)->value;
+                cast->rhs = parser_read_expr(parser, 0);
+
+                free(left->value);
+                left->value = cast;
+            }
         }
         else if ( strcmp(cur->value, "fn") == 0 ) {
             left->value = parser_read_function(parser, true);
@@ -1411,15 +1443,14 @@ struct_t* parser_read_struct(parser_state_t* parser) {
     token_clean(cur);
 
     if ( IF_NEXT(parser->lex, ":", cur) ) {
-        char* tmp = strdup(cur->value);
-
         token_clean(cur);
 
-        if ( tmp == NULL ) {
-            goto error;
-        }
+        char* name;
 
-        if ( parser_typedef(parser, tmp, strc, struct_typedef) == -1 ) {
+        NEXT_NAME(parser->lex, name)
+
+        if ( parser_typedef(parser, name, strc, struct_typedef) == -1 ) {
+            printf("ERROR\n");
             goto error;
         }
     }
@@ -1430,6 +1461,7 @@ struct_t* parser_read_struct(parser_state_t* parser) {
 
     error:
 
+    printf("ERROR\n");
     // typedef will be cleaned on parser cleanup
 
     struct_clean(strc);
@@ -1605,10 +1637,6 @@ void parser_clean(parser_state_t* parser) {
 
     if ( parser->typedefs != NULL ) {
         for ( int i = 0; i < parser->typedef_len; i++ ) {
-            if ( parser->typedefs[i]->type == struct_typedef ) {
-                struct_clean(parser->typedefs[i]->data);
-            }
-
             free((void*) parser->typedefs[i]->name);
             free(parser->typedefs[i]);
         }

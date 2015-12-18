@@ -85,7 +85,8 @@ typedef enum {
     expr_call,      // var();
     expr_tetirary,  // var ? var : var
     expr_fn,        // fn() { }
-    expr_expr       // (var)
+    expr_expr,      // (var)
+    expr_cast       // (name) test
 } expr_type_t;
 
 typedef struct {
@@ -96,6 +97,11 @@ typedef struct {
     void* value;
     expr_type_t type;
 } expr_t;
+
+typedef struct {
+    char* type;
+    expr_t* rhs;
+} expr_cast_t;
 
 typedef struct {
     const char* name;
@@ -136,7 +142,8 @@ typedef struct {
 typedef enum {
     DEREF_OP, // *
     OPP_OP,   // !
-    NEG_OP    // -
+    NEG_OP,   // -
+    ADDR_OP   // &
 } expr_prefix_op_t;
 
 typedef struct {
@@ -170,6 +177,7 @@ static expr_token_t expr_type[4][128] = {
         { "-", 0, 0, NEG_OP },
         { "!", 0, 0, OPP_OP },
         { "*", 0, 0, DEREF_OP },
+        { "&", 0, 0, ADDR_OP },
         { "", -1, 0 }
     },
 

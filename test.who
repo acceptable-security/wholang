@@ -1,5 +1,7 @@
+struct test {
+    what : lmao;
+} : test;
+
 fn blah() : int {
-    return fn() {
-        test();
-    };
+    var name : int = (test) 3;
 }

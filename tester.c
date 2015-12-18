@@ -1,4 +1,5 @@
 #include "parser.h"
+#include "x86.h"
 #include <stdlib.h>
 #include <stdio.h>
 
@@ -61,7 +62,7 @@ void test_expr() {
     free(parser);
 }
 
-int main(int argc, char* argv[]) {
+int run(int argc, char* argv[]) {
     if ( argc != 2 ) {
         printf("Usage: %s filename\n", argv[0]);
         return -1;
@@ -103,4 +104,21 @@ int main(int argc, char* argv[]) {
     free(buffer);
 
     return 0;
+}
+
+int main(int argc, char* argv[]) {
+    parser_state_t* parser = parser_init("fn func() { var test : int = 1 + 2; var butt : int = test + 2; }");
+    function_t* stmt = parser_read_function(parser, false);
+
+    function_debug(stmt);
+
+    printf("\n");
+
+    x86_state_t* st = x86_init();
+    x86_compile_function(st, stmt);
+    x86_label_debug(st->labels[0]);
+    x86_clean(st);
+
+    function_clean(stmt);
+    parser_clean(parser);
 }

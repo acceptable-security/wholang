@@ -1,0 +1,20 @@
+.global _main
+_main:
+PUSH $1
+POP %EAX
+PUSH $2
+POP %EBX
+ADD %EBX, %EAX
+PUSH %EAX
+POP %EAX
+MOV %EAX, -4(%EBP)
+MOV -4(%EBP), %EAX
+PUSH %EAX
+POP %EAX
+PUSH $2
+POP %EBX
+ADD %EBX, %EAX
+PUSH %EAX
+POP %EAX
+MOV %EAX, -8(%EBP)
+MOV $0, %EAX
