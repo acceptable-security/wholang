@@ -48,6 +48,17 @@ x86_arg_t* x86_number(int number) {
     return arg;
 }
 
+x86_arg_t* x86_label(x86_label_t* label) {
+    x86_arg_t* arg = (x86_arg_t*) malloc(sizeof(x86_arg_t));
+    arg->type = arg_label;
+
+    x86_arg_label_t* r = (x86_arg_label_t*) malloc(sizeof(x86_arg_label_t));
+    r->label = label;
+    arg->data = r;
+
+    return arg;
+}
+
 x86_state_t* x86_init() {
     x86_state_t* cmp = (x86_state_t*) malloc(sizeof(x86_state_t));
 
@@ -91,7 +102,10 @@ void x86_command_debug(x86_command_t* cmd) {
         "ORL",
         "XOR",
         "XORL",
-        "RET"
+        "RET",
+        "CALL",
+        "MULL",
+        "IMULL"
     };
 
     const char* regs[] = {
@@ -114,11 +128,18 @@ void x86_command_debug(x86_command_t* cmd) {
         else if ( cmd->arg1->type == arg_deref_reg ) {
             printf("[%%%s]", regs[((x86_deref_reg_t*) cmd->arg1->data)->reg]);
         }
+        else if ( cmd->arg1->type == arg_deref_off ) {
+            int amnt = ((x86_deref_off_t*) cmd->arg1->data)->amnt;
+            printf("[%%%s %s %d]", regs[((x86_deref_off_t*) cmd->arg1->data)->reg], amnt >= 0 ? "+" : "-", amnt);
+        }
         else if ( cmd->arg1->type == arg_reg_off ) {
             printf("%d(%%%s)", ((x86_reg_off_t*) cmd->arg1->data)->amnt, regs[((x86_reg_off_t*) cmd->arg1->data)->reg]);
         }
         else if ( cmd->arg1->type == arg_number ) {
             printf("$%d", ((x86_number_t*) cmd->arg1->data)->number);
+        }
+        else if ( cmd->arg1->type == arg_label ) {
+            printf("%s", ((x86_arg_label_t*) cmd->arg1->data)->label->name);
         }
 
         if ( cmd->arg2 != NULL ) {
@@ -130,11 +151,18 @@ void x86_command_debug(x86_command_t* cmd) {
             else if ( cmd->arg2->type == arg_deref_reg ) {
                 printf("[%%%s]", regs[((x86_deref_reg_t*) cmd->arg2->data)->reg]);
             }
+            else if ( cmd->arg2->type == arg_deref_off ) {
+                int amnt = ((x86_deref_off_t*) cmd->arg2->data)->amnt;
+                printf("[%%%s %s %d]", regs[((x86_deref_off_t*) cmd->arg2->data)->reg], amnt >= 0 ? "+" : "-", amnt);
+            }
             else if ( cmd->arg2->type == arg_reg_off ) {
                 printf("%d(%%%s)", ((x86_reg_off_t*) cmd->arg2->data)->amnt, regs[((x86_reg_off_t*) cmd->arg2->data)->reg]);
             }
             else if ( cmd->arg2->type == arg_number ) {
                 printf("$%d", ((x86_number_t*) cmd->arg2->data)->number);
+            }
+            else if ( cmd->arg2->type == arg_label ) {
+                printf("%s", ((x86_arg_label_t*) cmd->arg2->data)->label->name);
             }
         }
     }
@@ -143,6 +171,9 @@ void x86_command_debug(x86_command_t* cmd) {
 }
 
 void x86_label_debug(x86_label_t* label) {
+    if ( label->global ) {
+        printf(".global %s\n", label->name);
+    }
     printf("%s:\n", label->name);
 
 
@@ -267,6 +298,52 @@ x86_variable_t* x86_find_variable(x86_state_t* cmp, const char* name) {
     return NULL;
 }
 
+x86_type_t* x86_compile_fncall(x86_state_t* cmp, expr_call_t* call) {
+    x86_label_t* label = cmp->cur_label;
+    x86_label_t* c_label = NULL;
+
+    for ( int i = 0; i < cmp->label_cnt; i++ ) {
+        if ( strcmp(cmp->labels[i]->name, call->name) == 0 ) {
+            c_label = cmp->labels[i];
+            break;
+        }
+    }
+
+    if ( c_label == NULL ) {
+        goto error;
+    }
+
+    if ( c_label->fn ) {
+        function_t* fn = c_label->fn;
+
+        if ( call->len != fn->len ) {
+            printf("WRONG FUNCTION ARGS\n");
+            goto error;
+        }
+
+        int add = 0;
+
+        for ( int i = call->len - 1; i >= 0; i-- ) {
+            x86_type_t* type = x86_compile_expression(cmp, call->args[i]);
+            add += type->size;
+            free(type);
+        }
+        ASM(CALL, x86_label(c_label), NULL)
+        ASM(ADD, x86_number(add), x86_reg(ESP))
+        ASM(PUSH, x86_reg(EAX), NULL)
+
+        x86_type_t* type = (x86_type_t*) malloc(sizeof(x86_type_t));
+        type->size = x86_sizeof("int"); // TODO!!!
+        type->type = type_i32;
+
+        return type;
+    }
+
+    error:
+    // FUK
+    return NULL;
+}
+
 x86_type_t* x86_compile_expression(x86_state_t* cmp, expr_t* expr) {
     x86_label_t* label = cmp->cur_label;
 
@@ -299,6 +376,13 @@ x86_type_t* x86_compile_expression(x86_state_t* cmp, expr_t* expr) {
     }
     else if ( expr->type == expr_infix ) {
         expr_infix_t* infx = expr->value;
+
+        if ( infx->rhs->type == expr_expr || infx->rhs->type == expr_infix ) {
+            expr_t* tmp = infx->rhs;
+            infx->rhs = infx->lhs;
+            infx->lhs = tmp;
+        }
+
         x86_type_t* type1 = x86_compile_expression(cmp, infx->lhs);
         ASM(POP, x86_reg(EAX), NULL)
         x86_type_t* type2 = x86_compile_expression(cmp, infx->rhs);
@@ -311,7 +395,7 @@ x86_type_t* x86_compile_expression(x86_state_t* cmp, expr_t* expr) {
             ASM(SUB, x86_reg(EBX), x86_reg(EAX))
         }
         else if ( infx->op.token_val == MUL_BIN_OP ) {
-            ASM(MUL, x86_reg(EBX), x86_reg(EAX))
+            ASM(IMULL, x86_reg(EBX), x86_reg(EAX))
         }
         else if ( infx->op.token_val == DIV_BIN_OP ) {
             // TO DO
@@ -385,6 +469,12 @@ x86_type_t* x86_compile_expression(x86_state_t* cmp, expr_t* expr) {
         type->type = type_i32;
         return type;
     }
+    else if ( expr->type == expr_expr ) {
+        return x86_compile_expression(cmp, expr->value);
+    }
+    else if ( expr->type == expr_call ) {
+        return x86_compile_fncall(cmp, expr->value);
+    }
 
     error:
     return NULL;
@@ -441,9 +531,16 @@ void x86_compile_statement(x86_state_t* cmp, stmt_t* stmt) {
         })
     }
     else if ( stmt->type == ret_stmt ) {
-        x86_compile_expression(cmp, (expr_t*) stmt->data);
+        x86_type_t* type = x86_compile_expression(cmp, (expr_t*) stmt->data);
+
+        free(type);
+
         ASM(POP, x86_reg(EAX), NULL)
+        ASM(POP, x86_reg(EBP), NULL)
         ASM(RET, NULL, NULL)
+    }
+    else if ( stmt->type == call_stmt ) {
+        free(x86_compile_fncall(cmp, (expr_call_t*) stmt->data)); // kill me
     }
 
     error:
@@ -463,9 +560,57 @@ void x86_compile_function(x86_state_t* cmp, function_t* fn) {
     cmp->cur_label->cmds = INIT_LIST(x86_command_t);
     cmp->cur_label->cmd_cnt = 0;
     cmp->cur_label->cmd_alloc = MALLOC_CHUNK;
+    cmp->cur_label->global = true;
+    cmp->cur_label->fn = fn;
+
+    x86_label_t* label = cmp->cur_label;
+
+    ASM(PUSH, x86_reg(EBP), NULL)
+    ASM(MOVL, x86_reg(ESP), x86_reg(EBP))
+
+    for ( int i = 0; i < fn->len; i++ ) {
+        int size = x86_sizeof(fn->args[i]->type);
+
+        if ( size == 0 ) {
+            printf("UNKNOWN TYPE\n");
+            goto error;
+        }
+
+        x86_variable_t* var = (x86_variable_t*) malloc(sizeof(x86_variable_t));
+        cmp->curr_off -= size;
+
+        var->name = strdup(fn->args[i]->name);
+
+        if ( var->name == NULL ) {
+            printf("STRDUPFAIL\n");
+            free(var);
+            goto error;
+        }
+
+        var->offset = cmp->curr_off;
+        ASM(MOV, x86_offset_reg(EBP, 4 + ((i + 1) * size)), x86_reg(EAX))
+        ASM(MOV, x86_reg(EAX), x86_offset_reg(EBP, cmp->curr_off))
+
+        ADD_ARG(cmp->variables, cmp->variable_cnt, cmp->variable_alloc, var, {
+            free(var);
+        })
+    }
 
     for ( int i = 0; i < fn->block->len; i++ ) {
         x86_compile_statement(cmp, fn->block->stmts[i]);
+    }
+
+    if ( cmp->cur_label->cmds[cmp->cur_label->cmd_cnt - 1]->inst != RET ) {
+        if ( strcmp(fn->ret_type, "void") == 0 ) {
+            x86_label_t* label = cmp->cur_label;
+            ASM(POP, x86_reg(EBP), NULL)
+            ASM(MOV, x86_number(0), x86_reg(EAX))
+            ASM(RET, NULL, NULL)
+        }
+        else {
+            printf("NO RET TYPE FOUND FOR NONVOID\n");
+            goto error;
+        }
     }
 
     x86_label_optimize(cmp->cur_label);

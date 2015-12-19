@@ -1214,6 +1214,11 @@ function_t* parser_read_function(parser_state_t* parser, bool anonymous) {
         char* type;
 
         NEXT_NAME(parser->lex, name)
+
+        MUST_BE(parser->lex, ":", {
+            if ( name ) free(name);
+        })
+
         NEXT_NAME(parser->lex, type)
 
         if ( name == NULL ) {
@@ -1233,6 +1238,8 @@ function_t* parser_read_function(parser_state_t* parser, bool anonymous) {
         }
 
         function_arg_t* arg = (function_arg_t*) malloc(sizeof(function_arg_t));
+        arg->type = type;
+        arg->name = name;
 
         if ( arg == NULL ) {
             lexer_error(parser->lex, "Unable to allocate enough memory for a function argument.\n");
@@ -1245,7 +1252,12 @@ function_t* parser_read_function(parser_state_t* parser, bool anonymous) {
             free(arg);
         })
 
-        MUST_BE(parser->lex, ",", {})
+        if ( IF_NEXT(parser->lex, ")", cur) ) {
+            break;
+        }
+        else {
+            MUST_BE(parser->lex, ",", {})
+        }
     }
 
     token_clean(cur);

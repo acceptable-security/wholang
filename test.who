@@ -1,7 +1,10 @@
-struct test {
-    what : lmao;
-} : test;
 
-fn blah() : int {
-    var name : int = (test) 3;
+fn blah(a: int) : int {
+    var b : int = 2;
+    return a * b;
+}
+
+fn _main() : int {
+    var test : int = blah(3);
+    return 0;
 }

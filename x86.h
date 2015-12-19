@@ -1,3 +1,5 @@
+#include <stdbool.h>
+
 typedef enum {
     PUSH,
     PUSHL,
@@ -23,7 +25,10 @@ typedef enum {
     ORL,
     XOR,
     XORL,
-    RET
+    RET,
+    CALL,
+    MULL,
+    IMULL
 } x86_instruction_t;
 
 typedef enum {
@@ -51,6 +56,11 @@ typedef struct {
 } x86_deref_reg_t;
 
 typedef struct {
+    x86_register_t reg;
+    int amnt;
+} x86_deref_off_t;
+
+typedef struct {
     int number;
 } x86_number_t;
 
@@ -58,7 +68,9 @@ typedef enum {
     arg_reg,
     arg_deref_reg,
     arg_reg_off,
-    arg_number
+    arg_deref_off,
+    arg_number,
+    arg_label
 } x86_type_arg_t;
 
 typedef struct {
@@ -89,10 +101,18 @@ typedef struct {
 
 typedef struct {
     const char* name;
+
+    void* fn;
+    bool global;
+
     x86_command_t** cmds;
     unsigned int cmd_cnt;
     unsigned int cmd_alloc;
 } x86_label_t;
+
+typedef struct {
+    x86_label_t* label;
+} x86_arg_label_t;
 
 typedef struct {
     int offset;
@@ -121,6 +141,7 @@ typedef struct {
     }\
 
 x86_state_t* x86_init();
+x86_type_t* x86_compile_expression(x86_state_t* cmp, expr_t* expr);
 void x86_compile_statement(x86_state_t* cmp, stmt_t* stmt);
 void x86_label_debug(x86_label_t* label);
 void x86_label_optimize(x86_label_t* label);
