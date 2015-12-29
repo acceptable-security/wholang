@@ -113,6 +113,7 @@ typedef enum {
     JLE,
 
     RET,
+    LEAVE,
     CALL
 } x86_instruction_t;
 

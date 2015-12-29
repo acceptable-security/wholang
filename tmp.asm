@@ -2,6 +2,7 @@
 _main:
 	PUSH %EBP
 	MOVL %ESP, %EBP
+	SUBL $16, %ESP
 	MOV $2, %EAX
 	MOV %EAX, -4(%EBP)
 	PUSH $2
@@ -24,6 +25,6 @@ _main:
 	MOV %EAX, -4(%EBP)
 _LB1:
 _LB0:
-	MOV -4(%EBP), %EAXc
-	POP %EBP
+	MOV -4(%EBP), %EAX
+	LEAVE
 	RET

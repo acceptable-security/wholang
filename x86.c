@@ -253,6 +253,7 @@ void x86_command_debug(x86_command_t* cmd) {
         "JLE",
 
         "RET",
+        "LEAVE",
         "CALL"
     };
 
@@ -1092,7 +1093,7 @@ void x86_compile_statement(x86_state_t* cmp, stmt_t* stmt) {
         x86_type_t* type = x86_compile_expression(cmp, (expr_t*) stmt->data);
 
         ASM(POP, x86_reg(EAX), NULL)
-        ASM(POP, x86_reg(EBP), NULL)
+        ASM(LEAVE, NULL, NULL)
         ASM(RET, NULL, NULL)
 
         if ( !type->used ) {
@@ -1215,6 +1216,9 @@ void x86_compile_function(x86_state_t* cmp, function_t* fn) {
 
     ASM(PUSH, x86_reg(EBP), NULL)
     ASM(MOVL, x86_reg(ESP), x86_reg(EBP))
+    ASM(SUBL, x86_number(0), x86_reg(ESP))
+
+    int subl = label->cmd_cnt;
 
     for ( int i = 0; i < fn->len; i++ ) {
         x86_type_t* type = x86_type(cmp, fn->args[i]->type);
@@ -1255,11 +1259,13 @@ void x86_compile_function(x86_state_t* cmp, function_t* fn) {
         }
     }
 
+    ((x86_number_t*) label->cmds[2]->arg1->data)->number = abs(cmp->variables[cmp->variable_cnt - 1]->offset);
+
     if ( cmp->cur_label->cmds[cmp->cur_label->cmd_cnt - 1]->inst != RET ) {
         if ( strcmp(fn->ret_type, "void") == 0 ) {
             x86_label_t* label = cmp->cur_label;
             ASM(MOV, x86_number(0), x86_reg(EAX))
-            ASM(POP, x86_reg(EBP), NULL)
+            ASM(LEAVE, NULL, NULL)
             ASM(RET, NULL, NULL)
         }
         else {
@@ -1272,7 +1278,7 @@ void x86_compile_function(x86_state_t* cmp, function_t* fn) {
             if ( strcmp(fn->ret_type, "void") == 0 ) {
                 x86_label_t* label = cmp->cur_label;
                 ASM(MOV, x86_number(0), x86_reg(EAX))
-                ASM(POP, x86_reg(EBP), NULL)
+                ASM(LEAVE, NULL, NULL)
                 ASM(RET, NULL, NULL)
             }
             else {
@@ -1282,11 +1288,28 @@ void x86_compile_function(x86_state_t* cmp, function_t* fn) {
         }
     }
 
-    // x86_label_optimize(cmp->cur_label);
-
     ADD_ARG(cmp->labels, cmp->label_cnt, cmp->label_alloc, cmp->cur_label, {})
 
     cmp->cur_label = NULL;
+
+    if ( cmp->variables != NULL ) {
+        for ( int i = 0; i < cmp->variable_cnt; i++ ) {
+            x86_variable_t* var = cmp->variables[i];
+
+            if ( var == NULL ) continue;
+
+            if ( var->type ) free(var->type);
+
+            free((void*) var->name);
+            free(var);
+        }
+
+        free(cmp->variables);
+    }
+
+    cmp->variables = INIT_LIST(x86_variable_t);
+    cmp->variable_cnt = 0;
+    cmp->variable_alloc = MALLOC_CHUNK;
 
     error:
     // idf
