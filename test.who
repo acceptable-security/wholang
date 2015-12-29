@@ -1,11 +1,3 @@
 fn _main() : int {
-    var ayy : int = 2;
-
-    if ( ayy == 2 ) {
-        if ( ayy < 4 ) {
-            ayy = 0;
-        }
-    }
-
-    return ayy;
+    return 0;
 }

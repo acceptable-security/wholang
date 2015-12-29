@@ -1218,8 +1218,6 @@ void x86_compile_function(x86_state_t* cmp, function_t* fn) {
     ASM(MOVL, x86_reg(ESP), x86_reg(EBP))
     ASM(SUBL, x86_number(0), x86_reg(ESP))
 
-    int subl = label->cmd_cnt;
-
     for ( int i = 0; i < fn->len; i++ ) {
         x86_type_t* type = x86_type(cmp, fn->args[i]->type);
 
@@ -1259,7 +1257,12 @@ void x86_compile_function(x86_state_t* cmp, function_t* fn) {
         }
     }
 
-    ((x86_number_t*) label->cmds[2]->arg1->data)->number = abs(cmp->variables[cmp->variable_cnt - 1]->offset);
+    if ( cmp->curr_off == 0 ) {
+        _x86_label_remove(label, 2);
+    }
+    else {
+        ((x86_number_t*) label->cmds[2]->arg1->data)->number = -cmp->curr_off;
+    }
 
     if ( cmp->cur_label->cmds[cmp->cur_label->cmd_cnt - 1]->inst != RET ) {
         if ( strcmp(fn->ret_type, "void") == 0 ) {
