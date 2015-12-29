@@ -65,4 +65,4 @@ UUUUUUUUGH
 
 ## Pull Requests
 If you some how have managed to obtain so much time you can waste as to want to contribute to this project, please run
-valgrind on any builds and make sure that there are no memleaks. This is C afterall.
+valgrind on any builds and make sure that there are no memleaks. This is C after all.

@@ -2,4 +2,6 @@
 .gdb_history
 /wholang
 *.dSYM
-/tmp.asm
+*.asm
+.DS_STORE
+*.out

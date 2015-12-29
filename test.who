@@ -1,10 +1,11 @@
-
-fn blah(a: int) : int {
-    var b : int = 2;
-    return a * b;
-}
-
 fn _main() : int {
-    var test : int = blah(3);
-    return 0;
+    var ayy : int = 2;
+
+    if ( ayy == 2 ) {
+        if ( ayy < 4 ) {
+            ayy = 0;
+        }
+    }
+
+    return ayy;
 }

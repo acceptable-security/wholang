@@ -1,19 +1,29 @@
-.global blah
-blah:
-PUSH %EBP
-MOVLL %ESP, %EBP
-MOV 8(%EBP), %EAX
-MOV %EAX, -4(%EBP)
-POP %EBP
-RET
 .global _main
 _main:
-PUSH %EBP
-MOVL %ESP, %EBP
-PUSH $3
-CALL blah
-ADD $4, %ESP
-MOV %EAX, -8(%EBP)
-MOV $0, %EAX
-POP %EBP
-RET
+	PUSH %EBP
+	MOVL %ESP, %EBP
+	MOV $2, %EAX
+	MOV %EAX, -4(%EBP)
+	PUSH $2
+	MOV -4(%EBP), %EAX
+	POP %EBX
+	CMPL %EBX, %EAX
+	SETE %AL
+	MOVZBL %AL, %EAX
+	CMPL $1, %EAX
+	JL _LB0
+	PUSH $4
+	MOV -4(%EBP), %EAX
+	POP %EBX
+	CMPL %EBX, %EAX
+	SETL %AL
+	MOVZBL %AL, %EAX
+	CMPL $1, %EAX
+	JL _LB1
+	MOV $0, %EAX
+	MOV %EAX, -4(%EBP)
+_LB1:
+_LB0:
+	MOV -4(%EBP), %EAXc
+	POP %EBP
+	RET

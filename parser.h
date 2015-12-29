@@ -129,7 +129,7 @@ typedef enum {
     LTE_BIN_OP,        // <=
     GTE_BIN_OP,        // >=
     ET_BIN_OP,         // ==
-    EQ_BIN_OP,         // =
+    // EQ_BIN_OP,         // =
 } expr_infix_op_t;
 
 typedef struct {
@@ -188,7 +188,7 @@ static expr_token_t expr_type[4][128] = {
         { ">=", 1, 1, GTE_BIN_OP },
         { "<=", 1, 1, LTE_BIN_OP },
         { "==", 1, 1, ET_BIN_OP  },
-        { "=",  1, 1, EQ_BIN_OP  },
+        // { "=",  1, 1, EQ_BIN_OP  },
 
         { "+",  2, 1, ADD_BIN_OP },
         { "-",  2, 1, SUB_BIN_OP },
@@ -261,11 +261,10 @@ typedef struct {
 } vardec_stmt_t;
 
 typedef struct {
-    char* name;
+    expr_t* lhs;
     char mod;
     expr_t* value;
 } varset_stmt_t;
-
 
 typedef struct {
     const char* name;

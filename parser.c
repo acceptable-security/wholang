@@ -8,7 +8,7 @@
  #include <string.h>
  #include "parser.h"
 
-expr_token_t blank_expr = { "", -1, -1, -1 }; // hurr durr im an idiot please kill me
+expr_token_t blank_expr = { "", -1, -1, -1 }; // hurr durr im an idiot
 
 #define DBG_STMT 3
 #define DBG_LEX 2
@@ -237,6 +237,36 @@ expr_token_t _expr_token_info(char* t, int fix) {
     return blank_expr;
 }
 
+char* read_type(parser_state_t* parser) {
+    char* name;
+    token_t* cur;
+    int deref_cnt = 0;
+
+    NEXT_NAME(parser->lex, name)
+
+    int old = strlen(name);
+
+    while ( IF_NEXT(parser->lex, "*", cur) ) {
+        token_clean(cur);
+        deref_cnt += 1;
+    }
+
+    char* tmp = realloc(name, (old + 1 + deref_cnt) * sizeof(char));
+
+    if ( tmp == NULL ) {
+        free(name);
+        return NULL;
+    }
+
+    memset(tmp + old, '*', deref_cnt);
+    *(tmp + old + deref_cnt) = 0;
+
+    return tmp;
+
+    error:
+    return NULL;
+}
+
 expr_t* parser_read_expr(parser_state_t* parser, int pres) {
     expr_t* left = (expr_t*) malloc(sizeof(expr_t));
     left->value = NULL;
@@ -302,7 +332,7 @@ expr_t* parser_read_expr(parser_state_t* parser, int pres) {
             expr_token_t info = _expr_token_info(cur->value, 0);
 
             if ( info.fix == 0 ) {
-                DEBUG("PARSING PRFIX", DBG_LEX)
+                DEBUG("PARSING PREFIX", DBG_LEX)
 
                 token_clean(lexer_next(parser->lex));
                 cur = NULL;
@@ -354,6 +384,9 @@ expr_t* parser_read_expr(parser_state_t* parser, int pres) {
                     left->type = expr_prefix;
                     left->value = prfx;
                 }
+            }
+            else {
+
             }
         }
     }
@@ -593,6 +626,35 @@ expr_t* parser_read_expr(parser_state_t* parser, int pres) {
                     inf->op = info;
                 }
             }
+            else if ( left->type == expr_name && rhs->type == 0 && info.token_val == MUL_BIN_OP ) {
+                free(inf);
+                free(rhs);
+
+                char* name = left->value;
+                int deref_cnt = 1;
+
+                int old = strlen(name);
+
+                while ( IF_NEXT(parser->lex, "*", cur) ) {
+                    token_clean(cur);
+                    deref_cnt += 1;
+                }
+
+                char* tmp = realloc(name, (old + 1 + deref_cnt) * sizeof(char));
+
+                if ( tmp == NULL ) {
+                    free(name);
+                    return NULL;
+                }
+
+                memset(tmp + old, '*', deref_cnt);
+                *(tmp + old + deref_cnt) = 0;
+
+                left->value = tmp;
+                left->type = expr_name;
+
+                return left;
+            }
             else {
                 inf->lhs = left;
                 inf->rhs = rhs;
@@ -693,10 +755,12 @@ void stmt_debug(stmt_t* stmt) {
     }
     else if ( stmt->type == varset_stmt ) {
         if ( ((varset_stmt_t*) stmt->data)->mod ) {
-            printf("%s %c= ", ((varset_stmt_t*) stmt->data)->name, ((varset_stmt_t*) stmt->data)->mod);
+            expr_debug(((varset_stmt_t*) stmt->data)->lhs);
+            printf(" %c= ", ((varset_stmt_t*) stmt->data)->mod);
         }
         else {
-            printf("%s = ", ((varset_stmt_t*) stmt->data)->name);
+            expr_debug(((varset_stmt_t*) stmt->data)->lhs);
+            printf(" = ");
         }
 
         expr_debug(((varset_stmt_t*) stmt->data)->value);
@@ -745,7 +809,7 @@ void stmt_clean(stmt_t* stmt) {
         free(stmt->data);
     }
     else if ( stmt->type == varset_stmt ) {
-        free(((varset_stmt_t*) stmt->data)->name);
+        expr_clean(((varset_stmt_t*) stmt->data)->lhs);
         expr_clean(((varset_stmt_t*) stmt->data)->value);
 
         free(stmt->data);
@@ -928,7 +992,7 @@ stmt_t* parser_read_stmt(parser_state_t* parser) {
                 free(dec);
             })
 
-            NEXT_NAME(parser->lex, dec->type)
+            dec->type = read_type(parser);
 
             token_t* tmp;
             if ( IF_NEXT(parser->lex, "=", tmp) ) {
@@ -954,6 +1018,45 @@ stmt_t* parser_read_stmt(parser_state_t* parser) {
 
             stmt->type = ret_stmt;
             stmt->data = parser_read_expr(parser, 0);
+
+            MUST_BE(parser->lex, ";", {
+                if ( stmt->data != NULL ) {
+                    expr_clean(stmt->data);
+                }
+            })
+
+            return stmt;
+        }
+        else if ( strcmp(cur->value, "*") == 0 ) {
+            expr_t* lhs = parser_read_expr(parser, 0);
+
+            token_t* lookahead = lexer_next(parser->lex);
+
+            if ( lookahead == NULL || parser->lex->error ) {
+                goto error;
+            }
+
+            expr_t* value = parser_read_expr(parser, 0);
+
+            if ( value == NULL ) {
+                goto error;
+            }
+
+            varset_stmt_t* varset = (varset_stmt_t*) malloc(sizeof(varset_stmt_t));
+            varset->lhs = lhs;
+            varset->value = value;
+
+            if ( strlen(lookahead->value) > 1 ) {
+                varset->mod = ((char*) lookahead->value)[0];
+            }
+            else {
+                varset->mod = 0;
+            }
+
+            stmt->type = varset_stmt;
+            stmt->data = varset;
+
+            token_clean(lookahead);
 
             MUST_BE(parser->lex, ";", {
                 if ( stmt->data != NULL ) {
@@ -991,7 +1094,7 @@ stmt_t* parser_read_stmt(parser_state_t* parser) {
         else {
             if ( strcmp((char*) lookahead->value, "=") == 0 || ((((char*) lookahead->value)[1] == '=') &&
                                                                 (((char*) lookahead->value)[2] == '\0')) ) {
-                lexer_next(parser->lex);
+                expr_t* lhs = parser_read_expr(parser, 0);
                 lexer_next(parser->lex);
 
                 expr_t* value = parser_read_expr(parser, 0);
@@ -1001,8 +1104,8 @@ stmt_t* parser_read_stmt(parser_state_t* parser) {
                 }
 
                 varset_stmt_t* varset = (varset_stmt_t*) malloc(sizeof(varset_stmt_t));
+                varset->lhs = lhs;
                 varset->value = value;
-                varset->name = strdup(cur->value);
 
                 if ( strlen(lookahead->value) > 1 ) {
                     varset->mod = ((char*) lookahead->value)[0];
@@ -1014,7 +1117,6 @@ stmt_t* parser_read_stmt(parser_state_t* parser) {
                 stmt->type = varset_stmt;
                 stmt->data = varset;
 
-                token_clean(cur);
                 token_clean(lookahead);
             }
             else {
@@ -1219,7 +1321,7 @@ function_t* parser_read_function(parser_state_t* parser, bool anonymous) {
             if ( name ) free(name);
         })
 
-        NEXT_NAME(parser->lex, type)
+        type = read_type(parser);
 
         if ( name == NULL ) {
             if ( type != NULL ) {
@@ -1264,7 +1366,7 @@ function_t* parser_read_function(parser_state_t* parser, bool anonymous) {
 
     if ( IF_NEXT(parser->lex, ":", cur) ) {
         token_clean(cur);
-        NEXT_NAME(parser->lex, fn->ret_type)
+        fn->ret_type = read_type(parser);
 
         if ( fn->ret_type == NULL || strcmp(fn->ret_type, "") == 0 ) {
             goto error;
@@ -1413,7 +1515,7 @@ struct_t* parser_read_struct(parser_state_t* parser) {
         MUST_BE(parser->lex, ":", {
             free(name);
         })
-        NEXT_NAME(parser->lex, type)
+        type = read_type(parser);
 
         if ( name == NULL ) {
             if ( type != NULL ) {
