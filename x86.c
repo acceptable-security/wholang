@@ -1261,6 +1261,56 @@ void x86_compile_statement(x86_state_t* cmp, stmt_t* stmt) {
         ADD_ARG(cmp->labels, cmp->label_cnt, cmp->label_alloc, cmp->cur_label, {})
         cmp->cur_label = end_label;
     }
+    else if ( stmt->type == while_stmt ) {
+        while_stmt_t* whs = stmt->data;
+
+        x86_label_t* body_label = (x86_label_t*) malloc(sizeof(x86_label_t));
+        body_label->name = (char*) malloc((4 + _log10(cmp->curr_labels) + 1) * sizeof(char));
+        sprintf((char*) body_label->name, "_LB%d", cmp->curr_labels++);
+        body_label->cmds = INIT_LIST(x86_command_t);
+        body_label->cmd_cnt = 0;
+        body_label->cmd_alloc = MALLOC_CHUNK;
+        body_label->global = false;
+        body_label->fn = label->fn;
+
+        x86_label_t* end_label = (x86_label_t*) malloc(sizeof(x86_label_t));
+        end_label->name = (char*) malloc((4 + _log10(cmp->curr_labels) + 1) * sizeof(char));
+        sprintf((char*) end_label->name, "_LB%d", cmp->curr_labels++);
+        end_label->cmds = INIT_LIST(x86_command_t);
+        end_label->cmd_cnt = 0;
+        end_label->cmd_alloc = MALLOC_CHUNK;
+        end_label->global = false;
+        end_label->fn = label->fn;
+
+        ADD_ARG(cmp->labels, cmp->label_cnt, cmp->label_alloc, cmp->cur_label, {})
+        label = body_label;
+        cmp->cur_label = body_label;
+
+        x86_type_t* type = x86_compile_expression(cmp, whs->expr);
+
+        if ( type == NULL ) {
+            goto error;
+        }
+
+        if ( !type->used ) free(type);
+
+        ASM(POP, x86_reg(EAX), NULL)
+        ASM(CMPL, x86_number(1), x86_reg(EAX))
+        ASM(JL,  x86_label(end_label), NULL)
+
+        for ( int i = 0; i < whs->block->len; i++ ) {
+            x86_compile_statement(cmp, whs->block->stmts[i]);
+
+            if ( cmp->error ) {
+                goto error;
+            }
+        }
+
+        ASM(JMP, x86_label(body_label), NULL)
+
+        ADD_ARG(cmp->labels, cmp->label_cnt, cmp->label_alloc, cmp->cur_label, {})
+        cmp->cur_label = end_label;
+    }
 
     error:
     return;
