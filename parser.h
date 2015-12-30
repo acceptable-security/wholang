@@ -244,7 +244,10 @@ typedef struct {
 } if_stmt_t;
 
 typedef struct {
-    expr_t* expr[3];
+    stmt_t* init;
+    expr_t* cond;
+    stmt_t* step;
+
     block_t* block;
 } for_stmt_t;
 
@@ -331,7 +334,7 @@ expr_t* parser_read_expr(parser_state_t* parser, int pres);
 void expr_debug(expr_t* expr);
 void expr_clean(expr_t* expr);
 
-stmt_t* parser_read_stmt(parser_state_t* parser);
+stmt_t* parser_read_stmt(parser_state_t* parser, bool _inline);
 void stmt_debug(stmt_t* stmt);
 void stmt_clean(stmt_t* stmt);
 

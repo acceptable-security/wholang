@@ -739,11 +739,11 @@ void stmt_debug(stmt_t* stmt) {
     }
     else if ( stmt->type == for_stmt ) {
         printf("for ( ");
-        expr_debug(((for_stmt_t*) stmt->data)->expr[0]);
+        stmt_debug(((for_stmt_t*) stmt->data)->init);
         printf("; ");
-        expr_debug(((for_stmt_t*) stmt->data)->expr[1]);
+        expr_debug(((for_stmt_t*) stmt->data)->cond);
         printf("; ");
-        expr_debug(((for_stmt_t*) stmt->data)->expr[2]);
+        stmt_debug(((for_stmt_t*) stmt->data)->step);
         printf(" ) ");
         block_debug(((for_stmt_t*) stmt->data)->block);
     }
@@ -792,9 +792,9 @@ void stmt_clean(stmt_t* stmt) {
         free(stmt->data);
     }
     else if ( stmt->type == for_stmt ) {
-        expr_clean(((for_stmt_t*) stmt->data)->expr[0]);
-        expr_clean(((for_stmt_t*) stmt->data)->expr[1]);
-        expr_clean(((for_stmt_t*) stmt->data)->expr[2]);
+        stmt_clean(((for_stmt_t*) stmt->data)->init);
+        expr_clean(((for_stmt_t*) stmt->data)->cond);
+        stmt_clean(((for_stmt_t*) stmt->data)->step);
         block_clean(((for_stmt_t*) stmt->data)->block);
         free(stmt->data);
     }
@@ -821,7 +821,7 @@ void stmt_clean(stmt_t* stmt) {
     free(stmt);
 }
 
-stmt_t* parser_read_stmt(parser_state_t* parser) {
+stmt_t* parser_read_stmt(parser_state_t* parser, bool _inline) {
     stmt_t* stmt = (stmt_t*) malloc(sizeof(stmt_t));
     token_t* cur = NULL;
 
@@ -921,54 +921,54 @@ stmt_t* parser_read_stmt(parser_state_t* parser) {
                 goto error;
             }
 
-            ((for_stmt_t*) stmt->data)->expr[0] = parser_read_expr(parser, 0);
+            ((for_stmt_t*) stmt->data)->init = parser_read_stmt(parser, true);
 
-            if ( ((for_stmt_t*) stmt->data)->expr[0] == NULL ) {
+            if ( ((for_stmt_t*) stmt->data)->init == NULL ) {
                 free(stmt->data);
                 goto error;
             }
 
             MUST_BE(parser->lex, ";", {
-                expr_clean(((for_stmt_t*) stmt->data)->expr[0]);
+                stmt_clean(((for_stmt_t*) stmt->data)->init);
                 free(stmt->data);
             })
 
-            ((for_stmt_t*) stmt->data)->expr[1] = parser_read_expr(parser, 0);
+            ((for_stmt_t*) stmt->data)->cond = parser_read_expr(parser, 0);
 
-            if ( ((for_stmt_t*) stmt->data)->expr[1] == NULL ) {
-                expr_clean(((for_stmt_t*) stmt->data)->expr[0]);
+            if ( ((for_stmt_t*) stmt->data)->cond == NULL ) {
+                expr_clean(((for_stmt_t*) stmt->data)->cond);
                 free(stmt->data);
                 goto error;
             }
 
             MUST_BE(parser->lex, ";", {
-                expr_clean(((for_stmt_t*) stmt->data)->expr[0]);
-                expr_clean(((for_stmt_t*) stmt->data)->expr[1]);
+                stmt_clean(((for_stmt_t*) stmt->data)->init);
+                expr_clean(((for_stmt_t*) stmt->data)->cond);
                 free(stmt->data);
             })
 
-            ((for_stmt_t*) stmt->data)->expr[2] = parser_read_expr(parser, 0);
+            ((for_stmt_t*) stmt->data)->step = parser_read_stmt(parser, true);
 
-            if ( ((for_stmt_t*) stmt->data)->expr[2] == NULL ) {
-                expr_clean(((for_stmt_t*) stmt->data)->expr[1]);
-                expr_clean(((for_stmt_t*) stmt->data)->expr[0]);
+            if ( ((for_stmt_t*) stmt->data)->step == NULL ) {
+                expr_clean(((for_stmt_t*) stmt->data)->cond);
+                stmt_clean(((for_stmt_t*) stmt->data)->init);
                 free(stmt->data);
                 goto error;
             }
 
             MUST_BE(parser->lex, ")", {
-                expr_clean(((for_stmt_t*) stmt->data)->expr[1]);
-                expr_clean(((for_stmt_t*) stmt->data)->expr[0]);
-                expr_clean(((for_stmt_t*) stmt->data)->expr[2]);
+                stmt_clean(((for_stmt_t*) stmt->data)->init);
+                expr_clean(((for_stmt_t*) stmt->data)->step);
+                stmt_clean(((for_stmt_t*) stmt->data)->cond);
                 free(stmt->data);
             })
 
             ((for_stmt_t*) stmt->data)->block = parser_read_block(parser);
 
             if ( ((for_stmt_t*) stmt->data)->block == NULL ) {
-                expr_clean(((for_stmt_t*) stmt->data)->expr[1]);
-                expr_clean(((for_stmt_t*) stmt->data)->expr[0]);
-                expr_clean(((for_stmt_t*) stmt->data)->expr[2]);
+                stmt_clean(((for_stmt_t*) stmt->data)->init);
+                expr_clean(((for_stmt_t*) stmt->data)->step);
+                stmt_clean(((for_stmt_t*) stmt->data)->cond);
                 free(stmt->data);
                 goto error;
             }
@@ -1003,13 +1003,15 @@ stmt_t* parser_read_stmt(parser_state_t* parser) {
             stmt->data = dec;
             stmt->type = vardec_stmt;
 
-            MUST_BE(parser->lex, ";", {
-                if ( dec->value != NULL ) {
-                    expr_clean(dec->value);
-                }
+            if ( !_inline ) {
+                MUST_BE(parser->lex, ";", {
+                    if ( dec->value != NULL ) {
+                        expr_clean(dec->value);
+                    }
 
-                free(dec);
-            })
+                    free(dec);
+                })
+            }
 
             return stmt;
         }
@@ -1058,11 +1060,13 @@ stmt_t* parser_read_stmt(parser_state_t* parser) {
 
             token_clean(lookahead);
 
-            MUST_BE(parser->lex, ";", {
-                if ( stmt->data != NULL ) {
-                    expr_clean(stmt->data);
-                }
-            })
+            if ( !_inline ) {
+                MUST_BE(parser->lex, ";", {
+                    if ( stmt->data != NULL ) {
+                        expr_clean(stmt->data);
+                    }
+                })
+            }
 
             return stmt;
         }
@@ -1125,11 +1129,13 @@ stmt_t* parser_read_stmt(parser_state_t* parser) {
             }
         }
 
-        MUST_BE(parser->lex, ";", {
-            if ( stmt->data != NULL ) {
-                expr_clean(stmt->data);
-            }
-        })
+        if ( !_inline ) {
+            MUST_BE(parser->lex, ";", {
+                if ( stmt->data != NULL ) {
+                    expr_clean(stmt->data);
+                }
+            })
+        }
 
         return stmt;
     }
@@ -1183,11 +1189,11 @@ block_t* parser_read_block(parser_state_t* parser) {
     block->len = 0;
     block->stmts = INIT_LIST(stmt_t);
 
-    stmt = parser_read_stmt(parser);
+    stmt = parser_read_stmt(parser, false);
 
     while ( stmt != NULL ) {
         ADD_ARG(block->stmts, block->len, block->alloc, stmt, {})
-        stmt = parser_read_stmt(parser);
+        stmt = parser_read_stmt(parser, false);
     }
 
     MUST_BE(parser->lex, "}", {})

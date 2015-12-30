@@ -1,3 +1,9 @@
 fn _main() : int {
-    return 0;
+    var j : int = 20;
+
+    for ( var i : int = 0; i < 10; i = i + 1 ) {
+        j = j - 2;
+    }
+
+    return j;
 }
