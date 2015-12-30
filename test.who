@@ -1,8 +1,8 @@
 fn _main() : int {
     var j : int = 20;
 
-    for ( var i : int = 0; i < 10; i = i + 1 ) {
-        j = j - 2;
+    for ( var i : int = 0; i < 10; i += 1 ) {
+        j -= 2;
     }
 
     return j;

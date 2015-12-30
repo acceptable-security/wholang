@@ -1127,7 +1127,25 @@ void x86_compile_statement(x86_state_t* cmp, stmt_t* stmt) {
             }
 
             ASM(POP, x86_reg(EAX), NULL)
-            ASM(MOV, x86_reg(EAX), x86_offset_reg(EBP, var->offset))
+
+            if ( varset->mod == 0 ) {
+                ASM(MOV, x86_reg(EAX), x86_offset_reg(EBP, var->offset))
+            }
+            else if ( varset->mod == '+' ) {
+                ASM(MOV, x86_offset_reg(EBP, var->offset), x86_reg(EBX))
+                ASM(ADD + 1 + _log2(type->size), x86_reg(EAX), x86_reg(EBX))
+                ASM(MOV, x86_reg(EBX), x86_offset_reg(EBP, var->offset))
+            }
+            else if ( varset->mod == '-' ) {
+                ASM(MOV, x86_offset_reg(EBP, var->offset), x86_reg(EBX))
+                ASM(SUB + 1 + _log2(type->size), x86_reg(EAX), x86_reg(EBX))
+                ASM(MOV, x86_reg(EBX), x86_offset_reg(EBP, var->offset))
+            }
+            else if ( varset->mod == '*' ) {
+                ASM(MOV, x86_offset_reg(EBP, var->offset), x86_reg(EBX))
+                ASM(IMUL + 1 + _log2(type->size), x86_reg(EAX), x86_reg(EBX))
+                ASM(MOV, x86_reg(EBX), x86_offset_reg(EBP, var->offset))
+            }
 
             free(type);
         }
