@@ -10,7 +10,7 @@ fn _main() : int {
     test2.b = 1;
 
     if ( test2.b < test2.a ) {
-        test2.a = 3;
+        test2.a = 3
     }
 
     var blah : int = 0;

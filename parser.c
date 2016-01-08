@@ -165,7 +165,7 @@ void expr_debug(expr_t* expr) {
 }
 
 void expr_clean(expr_t* expr) {
-    if ( !expr ) {
+    if ( expr == NULL ) {
         return;
     }
 
@@ -1129,7 +1129,10 @@ stmt_t* parser_read_stmt(parser_state_t* parser, bool _inline) {
             if ( !_inline ) {
                 MUST_BE(parser->lex, ";", {
                     if ( stmt->data != NULL ) {
-                        expr_clean(stmt->data);
+                        expr_clean(varset->lhs);
+                        expr_clean(varset->value);
+
+                        free(varset);
                     }
                 })
             }
@@ -1163,7 +1166,7 @@ stmt_t* parser_read_stmt(parser_state_t* parser, bool _inline) {
         }
         else {
             expr_t* lhs = parser_read_expr(parser, 0);
-            
+
             if ( lhs == NULL || parser->error ) {
                 goto error;
             }
@@ -1197,7 +1200,10 @@ stmt_t* parser_read_stmt(parser_state_t* parser, bool _inline) {
         if ( !_inline ) {
             MUST_BE(parser->lex, ";", {
                 if ( stmt->data != NULL ) {
-                    expr_clean(stmt->data);
+                    expr_clean(((varset_stmt_t*)stmt->data)->lhs);
+                    expr_clean(((varset_stmt_t*)stmt->data)->value);
+
+                    free((varset_stmt_t*)stmt->data);
                 }
             })
         }

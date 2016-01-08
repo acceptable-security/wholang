@@ -912,6 +912,10 @@ x86_type_t* x86_compile_expression(x86_state_t* cmp, expr_t* expr) {
         if ( infx->op.token_val == MBR_BIN_OP || infx->op.token_val == DMBR_BIN_OP ) {
             x86_type_t* type1 = x86_compile_expression(cmp, infx->lhs);
 
+            if ( type1 == NULL ) {
+                goto error;
+            }
+
             if ( infx->rhs->type != expr_name ) {
                 x86_error(cmp, "Must use names on the right hand of struct dereferences.\n");
                 goto error;
@@ -942,7 +946,10 @@ x86_type_t* x86_compile_expression(x86_state_t* cmp, expr_t* expr) {
 
             off = off + type1->offset;
 
+            // yuck out of ten
+            // THIS IS EW
             ret->offset = off; // s U C H A B AAAAAAA D I D E A
+            // BE GROSSED OUT ^^^
 
             _x86_label_remove(label, label->cmd_cnt - 1);
             _x86_label_remove(label, label->cmd_cnt - 1);
