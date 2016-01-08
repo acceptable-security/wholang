@@ -940,7 +940,7 @@ x86_type_t* x86_compile_expression(x86_state_t* cmp, expr_t* expr) {
                 goto error;
             }
 
-            off = -off - type1->offset;
+            off = off + type1->offset;
 
             ret->offset = off; // s U C H A B AAAAAAA D I D E A
 
