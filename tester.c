@@ -162,13 +162,28 @@ int main(int argc, char* argv[]) {
     x86_state_t* st = x86_init();
     st->parser = parser;
 
-    for ( int i = 0; i < parser->fn_len; i++ ) {
-        x86_compile_function(st, parser->functions[i]);
+    if ( parser->structs != NULL ) {
+        for ( int i = 0; i < parser->strc_len; i++ ) {
+            if ( parser->structs[i] != NULL ) {
+                x86_compile_struct(st, parser->structs[i]);
+            }
 
-        if ( st->error ) {
-            goto error;
+            if ( st->error ) {
+                goto error;
+            }
         }
     }
+
+    if ( parser->functions != NULL ) {
+        for ( int i = 0; i < parser->fn_len; i++ ) {
+            x86_compile_function(st, parser->functions[i]);
+
+            if ( st->error ) {
+                goto error;
+            }
+        }
+    }
+
 
     for ( int i = 0; i < st->string_cnt; i++ ) {
         printf(".LC%d:\n", i);

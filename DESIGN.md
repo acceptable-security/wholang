@@ -54,7 +54,7 @@ probably move towards it. So these are the accumulated thoughts of far:
 
     fn stringArray:\__alloc\__() { // Called when a struct is allocated via init.
         this->alloc = 8;
-        this->data = (str*) malloc(sizeof(str) * this->alloc); // NOTE: str is a pointer! If we were allocating for a string it'd need to be char!
+        this->data = [str*] malloc(sizeof(str) * this->alloc); // NOTE: str is a pointer! If we were allocating for a string it'd need to be char!
         this->length = 0;
     }
 

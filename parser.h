@@ -90,8 +90,14 @@ typedef enum {
 } expr_type_t;
 
 typedef struct {
+    char* name;
+    int deref_cnt;
+    bool is_const;
+    bool is_static;
+    bool is_struct;
 
-} fndec_expr_t;
+    void* data;
+} type_t;
 
 typedef struct {
     void* value;
@@ -99,7 +105,7 @@ typedef struct {
 } expr_t;
 
 typedef struct {
-    char* type;
+    type_t* type;
     expr_t* rhs;
 } expr_cast_t;
 
@@ -118,18 +124,21 @@ typedef enum {
     MOD_BIN_OP,    // %
     MOD_OP,        // %
 
-    SHL_BIN_OP,  // <<
-    SHR_BIN_OP, // >>
+    SHL_BIN_OP,    // <<
+    SHR_BIN_OP,    // >>
     OR_BIN_OP,     // |
     AND_BIN_OP,    // &
     XOR_BIN_OP,    // ^
 
-    LT_BIN_OP,         // <
-    GT_BIN_OP,         // >
-    LTE_BIN_OP,        // <=
-    GTE_BIN_OP,        // >=
-    ET_BIN_OP,         // ==
+    LT_BIN_OP,     // <
+    GT_BIN_OP,     // >
+    LTE_BIN_OP,    // <=
+    GTE_BIN_OP,    // >=
+    ET_BIN_OP,     // ==
     // EQ_BIN_OP,         // =
+
+    MBR_BIN_OP,    // .
+    DMBR_BIN_OP,   // ->
 } expr_infix_op_t;
 
 typedef struct {
@@ -202,6 +211,9 @@ static expr_token_t expr_type[4][128] = {
         { "&",  3, 1, AND_BIN_OP },
         { "^",  3, 1, XOR_BIN_OP },
 
+        { ".",  4, 1, MBR_BIN_OP },
+        { "->", 4, 1, DMBR_BIN_OP },
+
         { "",  -1, 1 }
     },
 
@@ -258,7 +270,7 @@ typedef struct {
 
 typedef struct {
     char* name;
-    char* type;
+    type_t* type;
 
     expr_t* value;
 } vardec_stmt_t;
@@ -271,14 +283,14 @@ typedef struct {
 
 typedef struct {
     const char* name;
-    const char* type;
+    type_t* type;
 } function_arg_t;
 
 typedef struct {
     block_t* block;
     unsigned int stmt_len;
 
-    const char* ret_type;
+    type_t* ret_type;
     const char* name;
 
     function_arg_t** args;
@@ -294,15 +306,9 @@ typedef struct {
     const char* name;
 } struct_t;
 
-typedef enum {
-    vardec_typedef,
-    struct_typedef
-} typedef_type_t;
-
 typedef struct {
     const char* name;
-    void* data;
-    typedef_type_t type;
+    type_t* type;
 } typedef_t;
 
 // Parser Information
@@ -324,6 +330,10 @@ typedef struct {
     unsigned int typedef_len;
     unsigned int typedef_alloc;
 } parser_state_t;
+
+type_t* parser_read_type(parser_state_t* parser);
+void type_debug(type_t* type);
+void type_clean(type_t* type);
 
 parser_state_t* parser_init(const char* src);
 void parser_debug(parser_state_t* parser);
@@ -350,4 +360,4 @@ struct_t* parser_read_struct(parser_state_t* parser);
 void struct_debug(struct_t* strc);
 void struct_clean(struct_t* strc);
 
-int parser_typedef(parser_state_t* parser, const char* name, void* data, typedef_type_t type);
+int parser_typedef(parser_state_t* parser, const char* name, type_t* type);

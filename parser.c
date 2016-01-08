@@ -55,6 +55,10 @@ parser_state_t* parser_init(const char* src) {
         "}",
         "<",
         ">",
+        "[",
+        "]",
+        "<",
+        ">",
         "var",
         "fn",
         "include",
@@ -63,6 +67,8 @@ parser_state_t* parser_init(const char* src) {
         "for",
         "return",
         "struct",
+        "const",
+        "static",
         "#",
         NULL
     };
@@ -147,7 +153,10 @@ void expr_debug(expr_t* expr) {
     else if ( expr->type == expr_cast ) {
         expr_cast_t* cast = expr->value;
 
-        printf("(%s) ", cast->type);
+        printf("(");
+        type_debug(cast->type);
+        printf(") ");
+
         expr_debug(cast->rhs);
     }
     else if ( expr->type == expr_fn ) {
@@ -209,7 +218,7 @@ void expr_clean(expr_t* expr) {
     else if ( expr->type == expr_cast ) {
         expr_cast_t* cast = (expr_cast_t*) expr->value;
 
-        if ( cast->type ) free(cast->type);
+        if ( cast->type ) type_clean(cast->type);
         if ( cast->rhs ) expr_clean(cast->rhs);
 
         free(cast);
@@ -237,34 +246,82 @@ expr_token_t _expr_token_info(char* t, int fix) {
     return blank_expr;
 }
 
-char* read_type(parser_state_t* parser) {
+type_t* parser_read_type(parser_state_t* parser) {
     char* name;
+    bool is_static = false;
+    bool is_const = false;
+    bool is_struct = false;
     token_t* cur;
     int deref_cnt = 0;
 
-    NEXT_NAME(parser->lex, name)
+    if ( IF_NEXT(parser->lex, "static", cur ) ) {
+        token_clean(cur);
+        is_static = true;
+    }
+    if ( IF_NEXT(parser->lex, "const", cur ) ) {
+        token_clean(cur);
+        is_const = true;
+    }
+    if ( IF_NEXT(parser->lex, "struct", cur) ) {
+        token_clean(cur);
+        is_struct = true;
+    }
 
-    int old = strlen(name);
+    NEXT_NAME(parser->lex, name)
 
     while ( IF_NEXT(parser->lex, "*", cur) ) {
         token_clean(cur);
         deref_cnt += 1;
     }
 
-    char* tmp = realloc(name, (old + 1 + deref_cnt) * sizeof(char));
+    type_t* type = (type_t*) malloc(sizeof(type_t));
 
-    if ( tmp == NULL ) {
-        free(name);
-        return NULL;
-    }
+    type->name = name;
+    type->deref_cnt = deref_cnt;
+    type->is_const = is_const;
+    type->is_static = is_static;
+    type->is_struct = is_struct;
 
-    memset(tmp + old, '*', deref_cnt);
-    *(tmp + old + deref_cnt) = 0;
-
-    return tmp;
+    return type;
 
     error:
     return NULL;
+}
+
+void type_debug(type_t* type) {
+    if ( type == NULL ) {
+        return;
+    }
+
+    if ( type->is_static ) {
+        printf("static ");
+    }
+    if ( type->is_const ) {
+        printf("const ");
+    }
+
+    if ( type->deref_cnt == 0 ) {
+        printf("%s ", type->name);
+    }
+    else {
+        printf("%s", type->name);
+
+        for ( int i = 0; i < type->deref_cnt; i++ ) {
+            printf("*");
+        }
+
+        printf(" ");
+    }
+}
+
+void type_clean(type_t* type) {
+    if ( type == NULL ) {
+        return;
+    }
+
+    if ( type->name ) free(type->name);
+
+    free(type);
 }
 
 expr_t* parser_read_expr(parser_state_t* parser, int pres) {
@@ -301,24 +358,30 @@ expr_t* parser_read_expr(parser_state_t* parser, int pres) {
             MUST_BE(parser->lex, ")", {
                 expr_clean(left->value);
             })
+        }
+        else if ( strcmp(cur->value, "[") == 0 ) {
+            cur = NULL;
 
-            if ( ((expr_t*) left->value)->type == expr_name ) {
-                left->type = expr_cast;
+            DEBUG("PRASING CAST", DBG_LEX)
 
-                expr_cast_t* cast = (expr_cast_t*) malloc(sizeof(expr_cast_t));
+            MUST_BE(parser->lex, "[", {})
 
-                if ( cast == NULL ) {
-                    expr_clean((expr_t*) left->value);
-                    left->value = NULL;
-                    goto error;
-                }
+            left->type = expr_cast;
+            expr_cast_t* cast = (expr_cast_t*) malloc(sizeof(expr_cast_t));
 
-                cast->type = (char*) ((expr_t*) left->value)->value;
-                cast->rhs = parser_read_expr(parser, 0);
-
-                free(left->value);
-                left->value = cast;
+            if ( cast == NULL ) {
+                expr_clean((expr_t*) left->value);
+                left->value = NULL;
+                goto error;
             }
+
+            cast->type = parser_read_type(parser);
+
+            MUST_BE(parser->lex, "]", {})
+
+            cast->rhs = parser_read_expr(parser, 0);
+
+            left->value = cast;
         }
         else if ( strcmp(cur->value, "fn") == 0 ) {
             left->value = parser_read_function(parser, true);
@@ -515,15 +578,6 @@ expr_t* parser_read_expr(parser_state_t* parser, int pres) {
 
             left->type = expr_call;
             left->value = call;
-        }
-        else if ( IF_NEXT(parser->lex, ".", next) ) {
-            DEBUG("PARSING DEREF", DBG_LEX)
-
-            token_clean(next);
-        }
-        else if ( IF_NEXT(parser->lex, "->", next) ) {
-            DEBUG("PARSING DEREF", DBG_LEX)
-            token_clean(next);
         }
         else {
             DEBUG("PARSING VARIABLE", DBG_LEX)
@@ -726,8 +780,9 @@ void stmt_debug(stmt_t* stmt) {
         printf(";\n");
     }
     else if ( stmt->type == vardec_stmt ) {
-        printf("var %s : %s = ", ((vardec_stmt_t*) stmt->data)->name,
-                                 ((vardec_stmt_t*) stmt->data)->type);
+        printf("var %s : ", ((vardec_stmt_t*) stmt->data)->name);
+        type_debug(((vardec_stmt_t*) stmt->data)->type);
+        printf("= ");
         expr_debug(((vardec_stmt_t*) stmt->data)->value);
         printf(";\n");
     }
@@ -799,7 +854,7 @@ void stmt_clean(stmt_t* stmt) {
         free(stmt->data);
     }
     else if ( stmt->type == vardec_stmt ) {
-        free(((vardec_stmt_t*) stmt->data)->type);
+        type_clean(((vardec_stmt_t*) stmt->data)->type);
         free(((vardec_stmt_t*) stmt->data)->name);
 
         if ( ((vardec_stmt_t*) stmt->data)->value ) {
@@ -958,8 +1013,8 @@ stmt_t* parser_read_stmt(parser_state_t* parser, bool _inline) {
 
             MUST_BE(parser->lex, ")", {
                 stmt_clean(((for_stmt_t*) stmt->data)->init);
-                expr_clean(((for_stmt_t*) stmt->data)->step);
-                stmt_clean(((for_stmt_t*) stmt->data)->cond);
+                stmt_clean(((for_stmt_t*) stmt->data)->step);
+                expr_clean(((for_stmt_t*) stmt->data)->cond);
                 free(stmt->data);
             })
 
@@ -967,8 +1022,8 @@ stmt_t* parser_read_stmt(parser_state_t* parser, bool _inline) {
 
             if ( ((for_stmt_t*) stmt->data)->block == NULL ) {
                 stmt_clean(((for_stmt_t*) stmt->data)->init);
-                expr_clean(((for_stmt_t*) stmt->data)->step);
-                stmt_clean(((for_stmt_t*) stmt->data)->cond);
+                stmt_clean(((for_stmt_t*) stmt->data)->step);
+                expr_clean(((for_stmt_t*) stmt->data)->cond);
                 free(stmt->data);
                 goto error;
             }
@@ -992,12 +1047,15 @@ stmt_t* parser_read_stmt(parser_state_t* parser, bool _inline) {
                 free(dec);
             })
 
-            dec->type = read_type(parser);
+            dec->type = parser_read_type(parser);
 
             token_t* tmp;
             if ( IF_NEXT(parser->lex, "=", tmp) ) {
                 token_clean(tmp);
                 dec->value = parser_read_expr(parser, 0);
+            }
+            else {
+                dec->value = NULL;
             }
 
             stmt->data = dec;
@@ -1007,6 +1065,14 @@ stmt_t* parser_read_stmt(parser_state_t* parser, bool _inline) {
                 MUST_BE(parser->lex, ";", {
                     if ( dec->value != NULL ) {
                         expr_clean(dec->value);
+                    }
+
+                    if ( dec->name != NULL ) {
+                        free(dec->name);
+                    }
+
+                    if ( dec->type != NULL ) {
+                        type_clean(dec->type);
                     }
 
                     free(dec);
@@ -1096,37 +1162,36 @@ stmt_t* parser_read_stmt(parser_state_t* parser, bool _inline) {
             }
         }
         else {
-            if ( strcmp((char*) lookahead->value, "=") == 0 || ((((char*) lookahead->value)[1] == '=') &&
-                                                                (((char*) lookahead->value)[2] == '\0')) ) {
-                expr_t* lhs = parser_read_expr(parser, 0);
-                lexer_next(parser->lex);
-
-                expr_t* value = parser_read_expr(parser, 0);
-
-                if ( value == NULL ) {
-                    goto error;
-                }
-
-                varset_stmt_t* varset = (varset_stmt_t*) malloc(sizeof(varset_stmt_t));
-                varset->lhs = lhs;
-                varset->value = value;
-
-                if ( strlen(lookahead->value) > 1 ) {
-                    varset->mod = ((char*) lookahead->value)[0];
-                }
-                else {
-                    varset->mod = 0;
-                }
-
-                stmt->type = varset_stmt;
-                stmt->data = varset;
-
-                token_clean(lookahead);
-            }
-            else {
-                lexer_error(parser->lex, "Unexpected %s", lookahead->value);
+            expr_t* lhs = parser_read_expr(parser, 0);
+            
+            if ( lhs == NULL || parser->error ) {
                 goto error;
             }
+
+            lookahead = lexer_next(parser->lex);
+
+            expr_t* value = parser_read_expr(parser, 0);
+
+            if ( value == NULL ) {
+                expr_clean(lhs);
+                goto error;
+            }
+
+            varset_stmt_t* varset = (varset_stmt_t*) malloc(sizeof(varset_stmt_t));
+            varset->lhs = lhs;
+            varset->value = value;
+
+            if ( strlen(lookahead->value) > 1 ) {
+                varset->mod = ((char*) lookahead->value)[0];
+            }
+            else {
+                varset->mod = 0;
+            }
+
+            stmt->type = varset_stmt;
+            stmt->data = varset;
+
+            token_clean(lookahead);
         }
 
         if ( !_inline ) {
@@ -1234,14 +1299,18 @@ void function_debug(function_t* fn) {
         printf("fn (");
 
     for ( int i = 0; i < fn->len; i++ ) {
-        printf("%s : %s", fn->args[i]->name, fn->args[i]->type);
+        printf("%s : ", fn->args[i]->name);
+
+        type_debug(fn->args[i]->type);
 
         if ( i < i - 1 ) {
             printf(", ");
         }
     }
 
-    printf(") : %s ", fn->ret_type);
+    printf(") : ");
+
+    type_debug(fn->ret_type);
 
     block_debug(fn->block);
 }
@@ -1252,7 +1321,7 @@ void function_clean(function_t* fn) {
     }
 
     if ( fn->name ) free((void*) fn->name);
-    if ( fn->ret_type) free((void*) fn->ret_type);
+    if ( fn->ret_type) type_clean((void*) fn->ret_type);
 
     if ( fn->args != NULL ) {
         for ( int i = 0; i < fn->len; i++ ) {
@@ -1319,7 +1388,7 @@ function_t* parser_read_function(parser_state_t* parser, bool anonymous) {
 
     while ( !(IF_NEXT(parser->lex, ")", cur)) ) {
         char* name;
-        char* type;
+        type_t* type;
 
         NEXT_NAME(parser->lex, name)
 
@@ -1327,11 +1396,11 @@ function_t* parser_read_function(parser_state_t* parser, bool anonymous) {
             if ( name ) free(name);
         })
 
-        type = read_type(parser);
+        type = parser_read_type(parser);
 
         if ( name == NULL ) {
             if ( type != NULL ) {
-                free(type);
+                type_clean(type);
             }
 
             goto error;
@@ -1356,7 +1425,7 @@ function_t* parser_read_function(parser_state_t* parser, bool anonymous) {
 
         ADD_ARG(fn->args, fn->len, fn->alloc, arg, {
             if ( arg->name) free((void*) arg->name);
-            if ( arg->type) free((void*) arg->type);
+            if ( arg->type) type_clean((void*) arg->type);
             free(arg);
         })
 
@@ -1372,14 +1441,18 @@ function_t* parser_read_function(parser_state_t* parser, bool anonymous) {
 
     if ( IF_NEXT(parser->lex, ":", cur) ) {
         token_clean(cur);
-        fn->ret_type = read_type(parser);
+        fn->ret_type = parser_read_type(parser);
 
-        if ( fn->ret_type == NULL || strcmp(fn->ret_type, "") == 0 ) {
+        if ( fn->ret_type == NULL ) {
             goto error;
         }
     }
     else {
-        fn->ret_type = strdup("void"); // fuggit
+        fn->ret_type = (type_t*) malloc(sizeof(type_t));
+        fn->ret_type->name = strdup("void"); // fuggit
+        fn->ret_type->deref_cnt = 0;
+        fn->ret_type->is_static = false;
+        fn->ret_type->is_const = false;
     }
 
     fn->block = parser_read_block(parser);
@@ -1401,7 +1474,7 @@ function_t* parser_read_function(parser_state_t* parser, bool anonymous) {
                 }
 
                 if ( fn->args[i]->type != NULL ) {
-                    free((void*) fn->args[i]->type);
+                    type_clean(fn->args[i]->type);
                 }
 
                 free(fn->args[i]);
@@ -1416,7 +1489,7 @@ function_t* parser_read_function(parser_state_t* parser, bool anonymous) {
     }
 
     if ( fn->ret_type != NULL ) {
-        free((void*) fn->ret_type);
+        type_clean(fn->ret_type);
     }
 
     if ( fn != NULL ) {
@@ -1439,7 +1512,8 @@ void struct_debug(struct_t* strc) {
         printf("struct {\n");
 
     for ( int i = 0; i < strc->len; i++ ) {
-        printf("%s : %s\n", strc->args[i]->name, strc->args[i]->type);
+        printf("%s : \n", strc->args[i]->name);
+        type_debug(strc->args[i]->type);
     }
 
     printf("};\n");
@@ -1461,7 +1535,7 @@ void struct_clean(struct_t* strc) {
                     }
 
                     if ( strc->args[i]->type != NULL ) {
-                        free((void*) strc->args[i]->type);
+                        type_clean(strc->args[i]->type);
                     }
 
                     free(strc->args[i]);
@@ -1515,17 +1589,17 @@ struct_t* parser_read_struct(parser_state_t* parser) {
 
     while ( !(IF_NEXT(parser->lex, "}", cur)) ) {
         char* name;
-        char* type;
+        type_t* type;
 
         NEXT_NAME(parser->lex, name)
         MUST_BE(parser->lex, ":", {
             free(name);
         })
-        type = read_type(parser);
+        type = parser_read_type(parser);
 
         if ( name == NULL ) {
             if ( type != NULL ) {
-                free(type);
+                type_clean(type);
             }
 
             goto error;
@@ -1543,7 +1617,7 @@ struct_t* parser_read_struct(parser_state_t* parser) {
 
         if ( arg == NULL ) {
             free(name);
-            free(type);
+            type_clean(type);
             lexer_error(parser->lex, "Unable to allocate enough memory for a function argument.\n");
             goto error;
         }
@@ -1557,23 +1631,36 @@ struct_t* parser_read_struct(parser_state_t* parser) {
             free(arg);
         })
 
-        MUST_BE(parser->lex, ";", {})
+
+        MUST_BE(parser->lex, ";", {}) // just 2 trigger error
     }
 
     token_clean(cur);
 
-    if ( IF_NEXT(parser->lex, ":", cur) ) {
-        token_clean(cur);
-
-        char* name;
-
-        NEXT_NAME(parser->lex, name)
-
-        if ( parser_typedef(parser, name, strc, struct_typedef) == -1 ) {
-            printf("ERROR\n");
-            goto error;
-        }
-    }
+    // type_t* type = (type_t*) malloc(sizeof(type_t));
+    //
+    // type->name = strc->name;
+    // type->deref_cnt = 0;
+    // type->is_const = false;
+    // type->is_static = false;
+    // type->is_struct = true;
+    // type->data = strc;
+    //
+    // if ( IF_NEXT(parser->lex, ":", cur) ) {
+    //     token_clean(cur);
+    //
+    //     char* name;
+    //
+    //     NEXT_NAME(parser->lex, name)
+    //
+    //     if ( parser_typedef(parser, name, type) == -1 ) {
+    //         printf("ERROR\n");
+    //         goto error;
+    //     }
+    // }
+    // else {
+    //     free(type);
+    // }
 
     MUST_BE(parser->lex, ";", {})
 
@@ -1589,7 +1676,7 @@ struct_t* parser_read_struct(parser_state_t* parser) {
     return NULL;
 }
 
-int parser_typedef(parser_state_t* parser, const char* name, void* data, typedef_type_t type) {
+int parser_typedef(parser_state_t* parser, const char* name, type_t* type) {
     if ( parser->typedefs == NULL ) {
         return -1;
     }
@@ -1611,7 +1698,6 @@ int parser_typedef(parser_state_t* parser, const char* name, void* data, typedef
     }
 
     def->name = name;
-    def->data = data;
     def->type = type;
 
     ADD_ARG(parser->typedefs, parser->typedef_len, parser->typedef_alloc, def, {
@@ -1693,6 +1779,11 @@ void parser_read(parser_state_t* parser) {
         else if ( lexer_matches_special(parser->lex, "/*") ) {
             // comment
         }
+        else {
+            lexer_error(parser->lex, "Unexpected token");
+            goto error;
+        }
+
 
         cur = lexer_cur(parser->lex);
     }

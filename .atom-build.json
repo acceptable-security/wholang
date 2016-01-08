@@ -1,5 +1,5 @@
 {
   "cmd": "gcc",
-  "args": [ "tester.c", "compiler.c", "parser.c", "lexer.c", "x86.c", "-o wholang", "-g" ],
+  "args": [ "tester.c", "parser.c", "lexer.c", "x86.c", "-o wholang", "-g" ],
   "sh": true
 }

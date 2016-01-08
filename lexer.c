@@ -364,7 +364,7 @@ token_t* _lexer_read_token(lexer_state_t* lex) {
         current = lex->source[lex->sourceIndex + index];
 
         while ( ((current >= 'a' && current <= 'z') || (current >= 'A' && current <= 'Z') ||
-                 (current >= '0' && current <= '9') || (current == '_' || current == '-')) &&
+                 (current >= '0' && current <= '9') || (current == '_')) &&
                  (lex->sourceIndex + index) < lex->_sourceLen ) {
             if ( index >= (currAlloc - 1) ) {
                 currAlloc += MALLOC_CHUNK;

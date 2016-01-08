@@ -119,6 +119,10 @@ x86_state_t* x86_init() {
     cmp->string_cnt = 0;
     cmp->string_alloc = MALLOC_CHUNK;
 
+    cmp->structs = INIT_LIST(x86_struct_t);
+    cmp->struct_cnt = 0;
+    cmp->struct_alloc = MALLOC_CHUNK;
+
     cmp->cur_label = NULL;
     cmp->curr_off = 0;
     cmp->curr_labels = 0;
@@ -425,6 +429,34 @@ void x86_clean(x86_state_t* cmp) {
         free(cmp->variables);
     }
 
+    if ( cmp->structs != NULL ) {
+        for ( int j = 0; j < cmp->struct_cnt; j++ ) {
+            x86_struct_t* cmp_strc = cmp->structs[j];
+
+            if ( cmp_strc != NULL ) {
+                if ( cmp_strc->args != NULL ) {
+                    for ( int i = 0; i < cmp_strc->arg_cnt; i++ ) {
+                        if ( cmp_strc->args[i] ) {
+                            if ( cmp_strc->args[i]->type ) free(cmp_strc->args[i]->type);
+                            if ( cmp_strc->args[i]->name ) free(cmp_strc->args[i]->name);
+
+                            free(cmp_strc->args[i]);
+                        }
+                    }
+
+                    free(cmp_strc->args);
+                }
+
+                if ( cmp_strc->name ) free(cmp_strc->name);
+
+                free(cmp_strc);
+            }
+        }
+
+
+        free(cmp->structs);
+    }
+
     if ( cmp->strings != NULL ) {
         free(cmp->strings);
     }
@@ -442,7 +474,7 @@ int x86_find_label(x86_state_t* cmp, const char* label) {
     return -1;
 }
 
-x86_type_t* x86_type(x86_state_t* cmp, const char* str) {
+x86_type_t* x86_type_string(x86_state_t* cmp, const char* str) {
     if ( str == NULL || cmp == NULL ) {
         return NULL;
     }
@@ -459,7 +491,7 @@ x86_type_t* x86_type(x86_state_t* cmp, const char* str) {
         memcpy(tmp, str, real);
         tmp[real] = '\0';
 
-        x86_type_t* type = x86_type(cmp, tmp);
+        x86_type_t* type = x86_type_string(cmp, tmp);
         type->deref_cnt = strlen(str) - real;
 
         free(tmp);
@@ -472,6 +504,10 @@ x86_type_t* x86_type(x86_state_t* cmp, const char* str) {
         type->size = 1;
         type->deref_cnt = 0;
         type->used = false;
+        type->is_const = false;
+        type->is_static = false;
+        type->is_struct = false;
+        type->struct_ind = 0;
         return type;
     }
     else if ( strcmp(str, "int8_t") == 0 ) {
@@ -480,6 +516,10 @@ x86_type_t* x86_type(x86_state_t* cmp, const char* str) {
         type->size = 1;
         type->deref_cnt = 0;
         type->used = false;
+        type->is_const = false;
+        type->is_static = false;
+        type->is_struct = false;
+        type->struct_ind = 0;
         return type;
     }
     else if ( strcmp(str, "uint16_t") == 0 || strcmp(str, "short") == 0 ) {
@@ -488,6 +528,10 @@ x86_type_t* x86_type(x86_state_t* cmp, const char* str) {
         type->size = 2;
         type->deref_cnt = 0;
         type->used = false;
+        type->is_const = false;
+        type->is_static = false;
+        type->is_struct = false;
+        type->struct_ind = 0;
         return type;
     }
     else if ( strcmp(str, "int16_t") == 0 ) {
@@ -496,6 +540,10 @@ x86_type_t* x86_type(x86_state_t* cmp, const char* str) {
         type->size = 2;
         type->deref_cnt = 0;
         type->used = false;
+        type->is_const = false;
+        type->is_static = false;
+        type->is_struct = false;
+        type->struct_ind = 0;
         return type;
     }
     else if ( strcmp(str, "uint32_t") == 0 || strcmp(str, "int") == 0 || strcmp(str, "long") == 0 ) {
@@ -504,6 +552,10 @@ x86_type_t* x86_type(x86_state_t* cmp, const char* str) {
         type->size = 4;
         type->deref_cnt = 0;
         type->used = false;
+        type->is_const = false;
+        type->is_static = false;
+        type->is_struct = false;
+        type->struct_ind = 0;
         return type;
     }
     else if ( strcmp(str, "int32_t") == 0 || strcmp(str, "uint") == 0 ) {
@@ -512,6 +564,10 @@ x86_type_t* x86_type(x86_state_t* cmp, const char* str) {
         type->size = 4;
         type->deref_cnt = 0;
         type->used = false;
+        type->is_const = false;
+        type->is_static = false;
+        type->is_struct = false;
+        type->struct_ind = 0;
         return type;
     }
     else if ( strcmp(str, "float") == 0 ) {
@@ -520,6 +576,10 @@ x86_type_t* x86_type(x86_state_t* cmp, const char* str) {
         type->size = 4;
         type->deref_cnt = 0;
         type->used = false;
+        type->is_const = false;
+        type->is_static = false;
+        type->is_struct = false;
+        type->struct_ind = 0;
         return type;
     }
     else if ( strcmp(str, "double") == 0 ) {
@@ -528,6 +588,22 @@ x86_type_t* x86_type(x86_state_t* cmp, const char* str) {
         type->size = 8;
         type->deref_cnt = 0;
         type->used = false;
+        type->is_const = false;
+        type->is_static = false;
+        type->is_struct = false;
+        type->struct_ind = 0;
+        return type;
+    }
+    else if ( strcmp(str, "str") == 0 ) {
+        x86_type_t* type = (x86_type_t*) malloc(sizeof(x86_type_t));
+        type->prim = prim_uint;
+        type->size = 1;
+        type->deref_cnt = 1;
+        type->used = false;
+        type->is_const = false;
+        type->is_static = false;
+        type->is_struct = false;
+        type->struct_ind = 0;
         return type;
     }
     else {
@@ -535,9 +611,7 @@ x86_type_t* x86_type(x86_state_t* cmp, const char* str) {
             typedef_t* type = cmp->parser->typedefs[i];
 
             if ( strcmp(type->name, (char*) type) == 0 ) {
-                if ( type->type == struct_typedef ) {
-                    // HANDLE STRUCT
-                }
+                return x86_type(cmp, type->type);
             }
         }
 
@@ -545,9 +619,143 @@ x86_type_t* x86_type(x86_state_t* cmp, const char* str) {
     }
 }
 
-bool x86_type_equ(x86_type_t* type1, x86_type_t* type2) {
-    return type1->prim == type2->prim && type1->deref_cnt == type2->deref_cnt &&
-           type1->size <= type2->size;
+void x86_compile_struct(x86_state_t* cmp, struct_t* strc) {
+    x86_struct_t* cmp_strc = (x86_struct_t*) malloc(sizeof(x86_struct_t));
+
+    if ( cmp_strc == NULL ) {
+        goto error;
+    }
+
+    if ( strc->name ) {
+        cmp_strc->name = strdup(strc->name);
+
+        if ( cmp_strc->name == NULL ) {
+            goto error;
+        }
+    }
+
+    cmp_strc->arg_cnt = 0;
+    cmp_strc->arg_alloc = strc->len * (sizeof(x86_struct_arg_t*));
+    cmp_strc->args = malloc(cmp_strc->arg_alloc);
+
+    cmp_strc->size = 0;
+
+    for ( int i = strc->len - 1; i >= 0; i-- ) {
+        x86_struct_arg_t* arg = (x86_struct_arg_t*) malloc(sizeof(x86_struct_arg_t));
+        arg->type = x86_type(cmp, strc->args[i]->type);
+        arg->type->used = true;
+        cmp_strc->size += arg->type->size;
+        arg->offset = cmp_strc->size;
+        arg->name = strdup(strc->args[i]->name);
+
+        ADD_ARG(cmp_strc->args, cmp_strc->arg_cnt, cmp_strc->arg_alloc, arg, {})
+    }
+
+    ADD_ARG(cmp->structs, cmp->struct_cnt, cmp->struct_alloc, cmp_strc, {})
+
+    return;
+    error:
+
+    if ( cmp_strc != NULL ) {
+        if ( cmp_strc->args != NULL ) {
+            for ( int i = 0; i < cmp_strc->arg_cnt; i++ ) {
+                if ( cmp_strc->args[i] ) {
+                    if ( cmp_strc->args[i]->type ) free(cmp_strc->args[i]->type);
+                    if ( cmp_strc->args[i]->name ) free(cmp_strc->args[i]->name);
+
+                    free(cmp_strc->args[i]);
+                }
+            }
+
+            free(cmp_strc->args);
+        }
+
+        free(cmp_strc);
+    }
+
+    cmp->error = true;
+    return;
+}
+
+x86_type_t* x86_type(x86_state_t* cmp, type_t* type) {
+    if ( cmp == NULL || type == NULL ) {
+        return NULL;
+    }
+
+    if ( type->is_struct ) {
+        for ( int i = 0; i < cmp->struct_cnt; i++ ) {
+            if ( strcmp(cmp->structs[i]->name, type->name) == 0 ) { // TODO - Better
+                x86_type_t* xtype = (x86_type_t*) malloc(sizeof(x86_type_t));
+                xtype->prim = prim_struct;
+                xtype->size = cmp->structs[i]->size;
+                xtype->deref_cnt = type->deref_cnt;
+                xtype->used = false;
+                xtype->is_const = false;
+                xtype->is_static = false;
+                xtype->is_struct = true;
+                xtype->struct_ind = i;
+
+                return xtype;
+            }
+        }
+
+        return NULL;
+    }
+    else {
+        x86_type_t* xtype = x86_type_string(cmp, type->name);
+
+        if ( xtype->deref_cnt == 0 ) {
+            xtype->deref_cnt = type->deref_cnt;
+        }
+
+        xtype->is_static = type->is_static;
+        xtype->is_const = type->is_const;
+
+        return xtype;
+    }
+}
+
+bool x86_type_equ(x86_state_t* cmp, x86_type_t* type1, x86_type_t* type2) {
+    if ( !type1->is_struct && !type2->is_struct ) {
+        return type1->prim == type2->prim && type1->deref_cnt == type2->deref_cnt &&
+               type1->size <= type2->size && type1->is_const == type2->is_const;
+    }
+    else {
+        if ( type1->is_struct && type2->is_struct ) {
+            x86_struct_t* struct1 = cmp->structs[type1->struct_ind];
+            x86_struct_t* struct2 = cmp->structs[type2->struct_ind];
+
+            if ( struct1 == NULL || struct2 == NULL ) return false;
+            if ( struct1->arg_cnt != struct2->arg_cnt ) return false;
+
+            for ( int i = 0; i < struct1->arg_cnt; i++ ) {
+                if ( !x86_type_equ(cmp, struct1->args[i]->type, struct2->args[i]->type) ) {
+                    return false;
+                }
+
+                if ( struct1->args[i]->name != NULL ) {
+                    if ( struct2->args[i]->name != NULL ) {
+                        if ( strcmp(struct1->args[i]->name, struct2->args[i]->name) != 0 ) {
+                            return false;
+                        }
+                    }
+                    else {
+                        return false;
+                    }
+                }
+                else {
+                    if ( struct2->args[i]->name != NULL ) {
+                        return false;
+                    }
+                }
+            }
+
+            return true;
+        }
+        else {
+            return false;
+        }
+    }
 }
 
 x86_variable_t* x86_find_variable(x86_state_t* cmp, const char* name) {
@@ -594,11 +802,11 @@ x86_type_t* x86_compile_fncall(x86_state_t* cmp, expr_call_t* call) {
                 free(want);
                 if ( !type->used ) free(type);
 
-                x86_error(cmp, "Invalid argument type \"%s\"\n", fn->args[i]->type);
+                x86_error(cmp, "Invalid argument type \"%s\"\n", fn->args[i]->type->name);
                 goto error;
             }
 
-            if ( !x86_type_equ(type, want) ) {
+            if ( !x86_type_equ(cmp, type, want) ) {
                 free(want);
                 if ( !type->used ) free(type);
 
@@ -695,10 +903,59 @@ x86_type_t* x86_compile_expression(x86_state_t* cmp, expr_t* expr) {
     else if ( expr->type == expr_infix ) {
         expr_infix_t* infx = expr->value;
 
-        if ( infx->rhs->type == expr_expr || infx->rhs->type == expr_infix ) {
-            expr_t* tmp = infx->rhs;
-            infx->rhs = infx->lhs;
-            infx->lhs = tmp;
+        // if ( infx->rhs->type == expr_expr || infx->rhs->type == expr_infix ) {
+        //     expr_t* tmp = infx->rhs;
+        //     infx->rhs = infx->lhs;
+        //     infx->lhs = tmp;
+        // }
+
+        if ( infx->op.token_val == MBR_BIN_OP || infx->op.token_val == DMBR_BIN_OP ) {
+            x86_type_t* type1 = x86_compile_expression(cmp, infx->lhs);
+
+            if ( infx->rhs->type != expr_name ) {
+                x86_error(cmp, "Must use names on the right hand of struct dereferences.\n");
+                goto error;
+            }
+
+            if ( type1->prim != prim_struct ) {
+                printf("%d\n", type1->prim);
+                x86_error(cmp, "Must dereference struct values.\n");
+                goto error;
+            }
+
+            int off = 0;
+            x86_type_t* ret;
+
+            for ( int i = 0; i < cmp->structs[type1->struct_ind]->arg_cnt; i++ ) {
+                if ( strcmp(cmp->structs[type1->struct_ind]->args[i]->name, infx->rhs->value) == 0 ) {
+                    off = cmp->structs[type1->struct_ind]->args[i]->offset;
+                    ret = cmp->structs[type1->struct_ind]->args[i]->type;
+
+                    break;
+                }
+            }
+
+            if ( off == 0 ) {
+                x86_error(cmp, "Invalid struct member %s\n", infx->rhs->value);
+                goto error;
+            }
+
+            off = -off - type1->offset;
+
+            ret->offset = off; // s U C H A B AAAAAAA D I D E A
+
+            _x86_label_remove(label, label->cmd_cnt - 1);
+            _x86_label_remove(label, label->cmd_cnt - 1);
+
+            ASM(MOV, x86_offset_reg(EBP, off), x86_reg(EAX))
+
+            if ( infx->op.token_val == DMBR_BIN_OP ) {
+                ASM(MOVL, x86_deref_reg(EAX), x86_reg(EAX))
+            }
+
+            ASM(PUSH, x86_reg(EAX), NULL)
+
+            return ret;
         }
 
         x86_type_t* type2 = x86_compile_expression(cmp, infx->rhs);
@@ -918,18 +1175,20 @@ x86_type_t* x86_compile_expression(x86_state_t* cmp, expr_t* expr) {
     }
     else if ( expr->type == expr_int ) {
         ASM(PUSH, x86_number(*(int*)expr->value), NULL)
-        return x86_type(cmp, "int");
+        return x86_type_string(cmp, "int");
     }
     else if ( expr->type == expr_name ) {
         x86_variable_t* var = x86_find_variable(cmp, expr->value);
 
         if ( var == NULL ) {
-            x86_error(cmp, "Unable to resolve variable \"%s\"", expr->value);
+            x86_error(cmp, "Unable to resolve variable \"%s\"\n", expr->value);
             goto error;
         }
 
         ASM(MOV, x86_offset_reg(EBP, var->offset), x86_reg(EAX))
         ASM(PUSH, x86_reg(EAX), NULL)
+
+        var->type->offset = var->offset;
 
         return var->type;
     }
@@ -941,11 +1200,13 @@ x86_type_t* x86_compile_expression(x86_state_t* cmp, expr_t* expr) {
     }
     else if ( expr->type == expr_double ) {
         ASM(PUSH, x86_ulong(*(long*)expr->value), NULL)
-        return x86_type(cmp, "double");
+        return x86_type_string(cmp, "double");
     }
     else if ( expr->type == expr_string ) {
         ASM(PUSH, x86_string(x86_resolve_string(cmp, expr->value)), NULL)
-        return x86_type(cmp, "char*");
+        x86_type_t* type = x86_type_string(cmp, "str");
+        type->is_const = true;
+        return type;
     }
     else if ( expr->type == expr_cast ) {
         expr_cast_t* prfx = expr->value;
@@ -957,7 +1218,7 @@ x86_type_t* x86_compile_expression(x86_state_t* cmp, expr_t* expr) {
         if ( new == NULL ) {
             if ( !type->used ) free(type);
 
-            x86_error(cmp, "Unable to resolve type \"%s\"\n", prfx->type);
+            x86_error(cmp, "Unable to resolve type \"%s\"\n", prfx->type->name);
             goto error;
         }
 
@@ -985,6 +1246,10 @@ void x86_compile_statement(x86_state_t* cmp, stmt_t* stmt) {
     if ( stmt->type == vardec_stmt ) {
         vardec_stmt_t* dec = stmt->data;
 
+        if ( dec->name == NULL ) {
+            goto error;
+        }
+
         if ( x86_find_variable(cmp, dec->name) != NULL ) {
             return;
         }
@@ -997,13 +1262,18 @@ void x86_compile_statement(x86_state_t* cmp, stmt_t* stmt) {
             if ( var->type == NULL ) {
                 free(var);
 
-                x86_error(cmp, "Unable to resolve type \"%s\"\n", dec->type);
+                x86_error(cmp, "Unable to resolve type \"%s\"\n", dec->type->name);
                 goto error;
             }
 
             var->type->used = true;
 
             cmp->curr_off -= var->type->deref_cnt > 0 ? 4 : var->type->size;
+
+            if ( var->type->is_struct ) {
+                cmp->curr_off = -((-cmp->curr_off + 15) & ~15);
+            }
+
 
             var->name = strdup(dec->name);
             var->size = var->type->deref_cnt > 0 ? 4 : var->type->size;
@@ -1026,11 +1296,11 @@ void x86_compile_statement(x86_state_t* cmp, stmt_t* stmt) {
                     free(var->type);
                     free(var);
 
-                    x86_error(cmp, "Unable to resolve type \"%s\"\n", dec->type);
+                    x86_error(cmp, "Unable to resolve type \"%s\"\n", dec->type->name);
                     goto error;
                 }
 
-                if ( !x86_type_equ(type, var->type) ) {
+                if ( !x86_type_equ(cmp, type, var->type) ) {
                     free(var->type);
                     free((void*) var->name);
                     free(var);
@@ -1060,7 +1330,7 @@ void x86_compile_statement(x86_state_t* cmp, stmt_t* stmt) {
                 free((void*) var->name);
                 free(var);
 
-                x86_error(cmp, "Unable to resolve type \"%s\"\n", dec->type);
+                x86_error(cmp, "Unable to resolve type \"%s\"\n", dec->type->name);
                 goto error;
             }
 
@@ -1092,6 +1362,10 @@ void x86_compile_statement(x86_state_t* cmp, stmt_t* stmt) {
     else if ( stmt->type == ret_stmt ) {
         x86_type_t* type = x86_compile_expression(cmp, (expr_t*) stmt->data);
 
+        if ( type == NULL ) {
+            goto error;
+        }
+
         ASM(POP, x86_reg(EAX), NULL)
         ASM(LEAVE, NULL, NULL)
         ASM(RET, NULL, NULL)
@@ -1117,9 +1391,14 @@ void x86_compile_statement(x86_state_t* cmp, stmt_t* stmt) {
                 goto error;
             }
 
+            if ( var->type->is_static || var->type->is_const ) {
+                x86_error(cmp, "Unable to redeclare a static/const type.\n");
+                goto error;
+            }
+
             x86_type_t* type = x86_compile_expression(cmp, varset->value);
 
-            if ( !x86_type_equ(var->type, type) ) {
+            if ( !x86_type_equ(cmp, var->type, type) ) {
                 free(type);
 
                 x86_error(cmp, "Type mismatch\n");
@@ -1147,7 +1426,59 @@ void x86_compile_statement(x86_state_t* cmp, stmt_t* stmt) {
                 ASM(MOV, x86_reg(EBX), x86_offset_reg(EBP, var->offset))
             }
 
-            free(type);
+            if ( !type->used ) free(type);
+        }
+        else if ( lhs->type == expr_infix) {
+            expr_infix_t* infx = lhs->value;
+            x86_type_t* type = x86_compile_expression(cmp, lhs);
+
+            if ( type == NULL ) {
+                goto error;
+            }
+
+            if ( type->is_static || type->is_const ) {
+                x86_error(cmp, "Unable to redeclare a static/const type.\n");
+                goto error;
+            }
+
+            _x86_label_remove(label, label->cmd_cnt - 1);
+            _x86_label_remove(label, label->cmd_cnt - 1);
+
+            x86_type_t* type1 = x86_compile_expression(cmp, varset->value);
+
+            if ( !x86_type_equ(cmp, type, type1) ) {
+                if ( !type->used ) free(type);
+                if ( !type1->used ) free(type1);
+
+                x86_error(cmp, "Type mismatch\n");
+                goto error;
+            }
+
+            ASM(POP, x86_reg(EBX), NULL)
+
+            // TO DO - DEREFERENCE
+
+            if ( varset->mod == 0 ) {
+                ASM(MOV, x86_reg(EBX), x86_offset_reg(EBP, type->offset))
+            }
+            else if ( varset->mod == '+' ) {
+                ASM(MOV, x86_offset_reg(EBP, type->offset), x86_reg(EBX))
+                ASM(ADD + 1 + _log2(type->size), x86_reg(EAX), x86_reg(EBX))
+                ASM(MOV, x86_reg(EBX), x86_offset_reg(EBP, type->offset))
+            }
+            else if ( varset->mod == '-' ) {
+                ASM(MOV, x86_offset_reg(EBP, type->offset), x86_reg(EBX))
+                ASM(SUB + 1 + _log2(type->size), x86_reg(EAX), x86_reg(EBX))
+                ASM(MOV, x86_reg(EBX), x86_offset_reg(EBP, type->offset))
+            }
+            else if ( varset->mod == '*' ) {
+                ASM(MOV, x86_offset_reg(EBP, type->offset), x86_reg(EBX))
+                ASM(IMUL + 1 + _log2(type->size), x86_reg(EAX), x86_reg(EBX))
+                ASM(MOV, x86_reg(EBX), x86_offset_reg(EBP, type->offset))
+            }
+
+            if ( !type1->used ) free(type1);
+            if ( !type->used ) free(type);
         }
         else {
             expr_prefix_t* prfx = lhs->value;
@@ -1385,7 +1716,7 @@ void x86_compile_function(x86_state_t* cmp, function_t* fn) {
     }
 
     if ( cmp->cur_label->cmds[cmp->cur_label->cmd_cnt - 1]->inst != RET ) {
-        if ( strcmp(fn->ret_type, "void") == 0 ) {
+        if ( strcmp(fn->ret_type->name, "void") == 0 ) {
             x86_label_t* label = cmp->cur_label;
             ASM(MOV, x86_number(0), x86_reg(EAX))
             ASM(LEAVE, NULL, NULL)
@@ -1398,7 +1729,7 @@ void x86_compile_function(x86_state_t* cmp, function_t* fn) {
     }
     else {
         if ( cmp->cur_label->cmd_cnt == 0 ) {
-            if ( strcmp(fn->ret_type, "void") == 0 ) {
+            if ( strcmp(fn->ret_type->name, "void") == 0 ) {
                 x86_label_t* label = cmp->cur_label;
                 ASM(MOV, x86_number(0), x86_reg(EAX))
                 ASM(LEAVE, NULL, NULL)

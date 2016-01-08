@@ -217,8 +217,30 @@ typedef struct {
     unsigned int size;
     x86_primitive_t prim;
     int deref_cnt;
+    int struct_ind;
+
+    bool is_static;
+    bool is_const;
+    bool is_struct;
+
     bool used;
+    int offset;
 } x86_type_t;
+
+typedef struct {
+    x86_type_t* type;
+    char* name;
+    int offset;
+} x86_struct_arg_t;
+
+typedef struct {
+    x86_struct_arg_t** args;
+    unsigned int arg_cnt;
+    unsigned int arg_alloc;
+
+    char* name;
+    unsigned int size;
+} x86_struct_t;
 
 typedef struct {
     const char* name;
@@ -260,6 +282,10 @@ typedef struct {
     unsigned int string_cnt;
     unsigned int string_alloc;
 
+    x86_struct_t** structs;
+    unsigned int struct_cnt;
+    unsigned int struct_alloc;
+
     int error;
 } x86_state_t;
 
@@ -274,8 +300,9 @@ typedef struct {
 x86_state_t* x86_init();
 void x86_clean(x86_state_t* cmp);
 int x86_find_label(x86_state_t* cmp, const char* label);
-x86_type_t* x86_type(x86_state_t* cmp, const char* str);
-bool x86_type_equ(x86_type_t* type1, x86_type_t* type2);
+x86_type_t* x86_type_string(x86_state_t* cmp, const char* str);
+x86_type_t* x86_type(x86_state_t* cmp, type_t* type);
+bool x86_type_equ(x86_state_t* cmp, x86_type_t* type1, x86_type_t* type2);
 x86_variable_t* x86_find_variable(x86_state_t* cmp, const char* name);
 x86_type_t* x86_compile_fncall(x86_state_t* cmp, expr_call_t* call);
 x86_type_t* x86_compile_expression(x86_state_t* cmp, expr_t* expr);

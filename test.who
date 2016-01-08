@@ -1,9 +1,21 @@
-fn _main() : int {
-    var j : int = 20;
+struct test {
+    a : int;
+    b : int;
+};
 
-    while ( j > 0 ) {
-        j -= 1;
+fn _main() : int {
+    var test2 : struct test;
+
+    test2.a = 2;
+    test2.b = 1;
+
+    if ( test2.b < test2.a ) {
+        test2.a = 3;
     }
 
-    return j;
+    var blah : int = 0;
+
+    test2.b = 2;
+
+    return blah;
 }
