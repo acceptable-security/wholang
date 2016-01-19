@@ -1,21 +1,27 @@
+struct other {
+    e : int;
+};
+
 struct test {
     a : int;
     b : int;
+
+    c : struct other;
 };
 
 fn _main() : int {
-    var test2 : struct test;
+    var st1 : struct test;
+    var st2 : struct other;
 
-    test2.a = 2;
-    test2.b = 1;
+    st1.c = st2; 
 
-    if ( test2.b < test2.a ) {
-        test2.a = 3
-    }
+    st1.a = 2;
+    st1.b = 1;
 
-    var blah : int = 0;
+    st1.c.e = 3;
 
-    test2.b = 2;
+    st1.b = 2;
+    st1.a = 6;
 
-    return blah;
+    return st1.c.e;
 }

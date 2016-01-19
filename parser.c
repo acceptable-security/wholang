@@ -650,7 +650,7 @@ expr_t* parser_read_expr(parser_state_t* parser, int pres) {
                 // and makes INF's RHS into RHS's LHS
                 // and RHS's LHS into INF
                 // :^) if that makes sense
-                if ( tmp->op.pres < info.pres ) {
+                if ( tmp->op.pres <= info.pres ) {
                     inf->lhs = left;
                     inf->rhs = tmp->lhs;
 

@@ -644,12 +644,15 @@ void x86_compile_struct(x86_state_t* cmp, struct_t* strc) {
         x86_struct_arg_t* arg = (x86_struct_arg_t*) malloc(sizeof(x86_struct_arg_t));
         arg->type = x86_type(cmp, strc->args[i]->type);
         arg->type->used = true;
-        cmp_strc->size += arg->type->size;
         arg->offset = cmp_strc->size;
+        cmp_strc->size += arg->type->size;
         arg->name = strdup(strc->args[i]->name);
 
         ADD_ARG(cmp_strc->args, cmp_strc->arg_cnt, cmp_strc->arg_alloc, arg, {})
     }
+
+    cmp_strc->size = (cmp_strc->size + 15) & ~15;
+
 
     ADD_ARG(cmp->structs, cmp->struct_cnt, cmp->struct_alloc, cmp_strc, {})
 
@@ -922,12 +925,11 @@ x86_type_t* x86_compile_expression(x86_state_t* cmp, expr_t* expr) {
             }
 
             if ( type1->prim != prim_struct ) {
-                printf("%d\n", type1->prim);
                 x86_error(cmp, "Must dereference struct values.\n");
                 goto error;
             }
 
-            int off = 0;
+            int off = -1;
             x86_type_t* ret;
 
             for ( int i = 0; i < cmp->structs[type1->struct_ind]->arg_cnt; i++ ) {
@@ -939,8 +941,8 @@ x86_type_t* x86_compile_expression(x86_state_t* cmp, expr_t* expr) {
                 }
             }
 
-            if ( off == 0 ) {
-                x86_error(cmp, "Invalid struct member %s\n", infx->rhs->value);
+            if ( off == -1 ) {
+                x86_error(cmp, "Invalid struct member %s\n", infx->rhs->value, infx->rhs->value);
                 goto error;
             }
 
@@ -957,6 +959,12 @@ x86_type_t* x86_compile_expression(x86_state_t* cmp, expr_t* expr) {
             ASM(MOV, x86_offset_reg(EBP, off), x86_reg(EAX))
 
             if ( infx->op.token_val == DMBR_BIN_OP ) {
+                if ( ret->deref_cnt == 0 ) {
+                    x86_error(cmp, "Can't dereference nonpointer\n");
+                    goto error;
+                }
+
+                ret->deref_cnt -= 1;
                 ASM(MOVL, x86_deref_reg(EAX), x86_reg(EAX))
             }
 
@@ -966,7 +974,17 @@ x86_type_t* x86_compile_expression(x86_state_t* cmp, expr_t* expr) {
         }
 
         x86_type_t* type2 = x86_compile_expression(cmp, infx->rhs);
+
+        if ( type2 == NULL ) {
+            goto error;
+        }
+
         x86_type_t* type1 = x86_compile_expression(cmp, infx->lhs);
+
+        if ( type1 == NULL) {
+            if ( !type2->used ) free(type2);
+            goto error;
+        }
 
         if ( type1->prim == prim_float ) {
             ASM(POP, x86_reg(XMM0), NULL)
@@ -1197,6 +1215,10 @@ x86_type_t* x86_compile_expression(x86_state_t* cmp, expr_t* expr) {
 
         var->type->offset = var->offset;
 
+        if ( var->type->prim == prim_struct ) {
+
+        }
+
         return var->type;
     }
     else if ( expr->type == expr_expr ) {
@@ -1404,6 +1426,10 @@ void x86_compile_statement(x86_state_t* cmp, stmt_t* stmt) {
             }
 
             x86_type_t* type = x86_compile_expression(cmp, varset->value);
+
+            if ( type == NULL ) {
+                goto error;
+            }
 
             if ( !x86_type_equ(cmp, var->type, type) ) {
                 free(type);
