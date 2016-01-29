@@ -1,5 +1,4 @@
 {
-  "cmd": "gcc",
-  "args": [ "tester.c", "parser.c", "lexer.c", "x86.c", "-o wholang", "-g" ],
+  "cmd": "make -C build",
   "sh": true
 }

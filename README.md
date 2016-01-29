@@ -1,31 +1,8 @@
 # wholang
 My experiments in lexing, compiling, and assembling.
 
-## Pipeline
-The way I've been designing it, the parts of this should at the end look something like
-
-    lexer -> parser -> compiler -> assembler -> linker
-
 ## Lexer
-Right now the API for the lexer is undocumented, but here's a wonderful copy and paste from the header file.
-
-    lexer_state_t* lexer_init(const char* src, const char* specialTokens[]);
-    void lexer_error(lexer_state_t* lex, const char* error, ...);
-    void lexer_debug(lexer_state_t* lex);
-    void lexer_clean(lexer_state_t* lex);
-
-    token_t* lexer_cur(lexer_state_t* lex);
-    token_t* lexer_lookahead(lexer_state_t* lex);
-    bool lexer_matches(lexer_state_t* lex, token_types_t tokentype);
-    bool lexer_lookaheadmatches(lexer_state_t* lex, token_types_t tokentype);
-    token_t* lexer_next(lexer_state_t* lex);
-    token_t* lexer_nextif(lexer_state_t* lex, token_types_t tokentype);
-    token_t* lexer_nextif_special(lexer_state_t* lex, const char* token);
-    token_t* lexer_expect(lexer_state_t* lex, token_types_t tokentype);
-    token_t* lexer_expect_special(lexer_state_t* lex, const char* token);
-    token_t* lexer_expectmatch(lexer_state_t* lex, const char* end, const char* start, int linenum);
-
-That's helpful, right?
+libwholex is currently being used.
 
 ## Parser
 Well. It's a little scary. Here's the API. Uses a weird/hackish Pratt Parser in order to do expression parsing, which

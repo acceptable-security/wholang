@@ -5,3 +5,4 @@
 *.asm
 .DS_STORE
 *.out
+build/

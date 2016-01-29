@@ -1,0 +1,4 @@
+lib = shared_library('libwholex', files=['../libwholex/src/lexer.c'])
+
+executable('wholang', libs=[lib],
+                      files=['src/tester.c', 'src/x86.c', 'src/parser.c'])
