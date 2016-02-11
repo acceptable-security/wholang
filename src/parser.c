@@ -655,6 +655,8 @@ expr_t* parser_read_expr(parser_state_t* parser, int pres) {
                 // and makes INF's RHS into RHS's LHS
                 // and RHS's LHS into INF
                 // :^) if that makes sense
+                // given a * ( a + b )
+                // turn it into (a * b) + b;
                 if ( tmp->op.pres <= info.pres ) {
                     inf->lhs = left;
                     inf->rhs = tmp->lhs;

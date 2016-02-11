@@ -1,15 +1,17 @@
 struct test {
     a : int;
+    b : int;
 };
 
-fn test(x : struct test) : int {
-    return x.a;
+fn test(x : struct test, y : int) : int {
+    return (x.b) - (x.a) + y;
 }
 
 fn _main() : int {
     var st1 : struct test;
 
     st1.a = 2;
+    st1.b = 3;
 
-    return test(st1);
+    return test(st1, 3);
 }

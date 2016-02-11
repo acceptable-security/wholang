@@ -420,9 +420,10 @@ void x86_clean(x86_state_t* cmp) {
 
             if ( var == NULL ) continue;
 
-            if ( var->type ) free(var->type);
+            if ( var->type != NULL ) free(var->type);
 
-            free((void*) var->name);
+            if ( var->name != NULL ) free((void*) var->name);
+
             free(var);
         }
 
@@ -1251,7 +1252,8 @@ x86_type_t* x86_compile_expression(x86_state_t* cmp, expr_t* expr) {
         ASM(PUSH, x86_reg(EAX), NULL)
 
         var->type->offset = var->offset;
-
+        var->type->used = true;
+        
         return var->type;
     }
     else if ( expr->type == expr_expr ) {
@@ -1713,6 +1715,8 @@ void x86_compile_statement(x86_state_t* cmp, stmt_t* stmt) {
 }
 
 void x86_compile_function(x86_state_t* cmp, function_t* fn) {
+    // function_debug(fn);
+
     int l = x86_find_label(cmp, fn->name);
 
     if ( l != -1 ) {
