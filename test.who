@@ -1,27 +1,15 @@
-struct other {
-    e : int;
-};
-
 struct test {
     a : int;
-    b : int;
-
-    c : struct other;
 };
+
+fn test(x : struct test) : int {
+    return x.a;
+}
 
 fn _main() : int {
     var st1 : struct test;
-    var st2 : struct other;
-
-    st1.c = st2; 
 
     st1.a = 2;
-    st1.b = 1;
 
-    st1.c.e = 3;
-
-    st1.b = 2;
-    st1.a = 6;
-
-    return st1.c.e;
+    return test(st1);
 }

@@ -299,6 +299,9 @@ void type_debug(type_t* type) {
     if ( type->is_const ) {
         printf("const ");
     }
+    if ( type->is_struct ) {
+        printf("struct ");
+    }
 
     if ( type->deref_cnt == 0 ) {
         printf("%s ", type->name);
@@ -319,7 +322,9 @@ void type_clean(type_t* type) {
         return;
     }
 
-    if ( type->name ) free(type->name);
+    if ( type->name != NULL ) {
+        free(type->name);
+    }
 
     free(type);
 }
@@ -782,8 +787,12 @@ void stmt_debug(stmt_t* stmt) {
     else if ( stmt->type == vardec_stmt ) {
         printf("var %s : ", ((vardec_stmt_t*) stmt->data)->name);
         type_debug(((vardec_stmt_t*) stmt->data)->type);
-        printf("= ");
-        expr_debug(((vardec_stmt_t*) stmt->data)->value);
+
+        if ( ((vardec_stmt_t*) stmt->data)->value ) {
+            printf("= ");
+            expr_debug(((vardec_stmt_t*) stmt->data)->value);
+        }
+
         printf(";\n");
     }
     else if ( stmt->type == if_stmt ) {
@@ -1339,7 +1348,7 @@ void function_clean(function_t* fn) {
                 }
 
                 if ( fn->args[i]->type != NULL ) {
-                    free((void*) fn->args[i]->type);
+                    type_clean(fn->args[i]->type);
                 }
 
                 free(fn->args[i]);

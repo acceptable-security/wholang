@@ -798,27 +798,64 @@ x86_type_t* x86_compile_fncall(x86_state_t* cmp, expr_call_t* call) {
         int add = 0;
 
         for ( int i = call->len - 1; i >= 0; i-- ) {
-            x86_type_t* type = x86_compile_expression(cmp, call->args[i]);
             x86_type_t* want = x86_type(cmp, fn->args[i]->type);
 
-            if ( want == NULL ) {
-                free(want);
-                if ( !type->used ) free(type);
+            if ( want->prim == prim_struct ) {
+                x86_type_t* type = x86_compile_expression(cmp, call->args[i]);
 
-                x86_error(cmp, "Invalid argument type \"%s\"\n", fn->args[i]->type->name);
-                goto error;
+                if ( want == NULL ) {
+                    free(want);
+                    if ( !type->used ) free(type);
+
+                    x86_error(cmp, "Invalid argument type \"%s\"\n", fn->args[i]->type->name);
+                    goto error;
+                }
+
+                _x86_label_remove(label, label->cmd_cnt - 1);
+                _x86_label_remove(label, label->cmd_cnt - 1);
+
+                if ( !x86_type_equ(cmp, type, want) ) {
+                    free(want);
+                    if ( !type->used ) free(type);
+
+                    x86_error(cmp, "Function argument type mismatch");
+                    goto error;
+                }
+
+                x86_struct_t* struc = cmp->structs[type->struct_ind];
+
+                for ( int i = 0; i < struc->arg_cnt; i++ ) {
+                    int off = cmp->structs[type->struct_ind]->args[i]->offset + type->offset;
+                    x86_type_t* ret = cmp->structs[type->struct_ind]->args[i]->type;
+                    ASM(MOV, x86_offset_reg(EBP, off), x86_reg(EAX))
+                    ASM(PUSH, x86_reg(EAX), NULL)
+                    add += cmp->structs[type->struct_ind]->args[i]->type->size;
+                }
+            }
+            else {
+                x86_type_t* type = x86_compile_expression(cmp, call->args[i]);
+
+                if ( want == NULL ) {
+                    free(want);
+                    if ( !type->used ) free(type);
+
+                    x86_error(cmp, "Invalid argument type \"%s\"\n", fn->args[i]->type->name);
+                    goto error;
+                }
+
+                if ( !x86_type_equ(cmp, type, want) ) {
+                    free(want);
+                    if ( !type->used ) free(type);
+
+                    x86_error(cmp, "Function argument type mismatch");
+                    goto error;
+                }
+
+                add += type->size;
+                free(type);
             }
 
-            if ( !x86_type_equ(cmp, type, want) ) {
-                free(want);
-                if ( !type->used ) free(type);
-
-                x86_error(cmp, "Function argument type mismatch");
-                goto error;
-            }
-
-            add += type->size;
-            free(type);
+            if ( !want->used ) free(want);
         }
 
         ASM(CALL, x86_label(c_label), NULL)
@@ -1215,10 +1252,6 @@ x86_type_t* x86_compile_expression(x86_state_t* cmp, expr_t* expr) {
 
         var->type->offset = var->offset;
 
-        if ( var->type->prim == prim_struct ) {
-
-        }
-
         return var->type;
     }
     else if ( expr->type == expr_expr ) {
@@ -1302,7 +1335,6 @@ void x86_compile_statement(x86_state_t* cmp, stmt_t* stmt) {
             if ( var->type->is_struct ) {
                 cmp->curr_off = -((-cmp->curr_off + 15) & ~15);
             }
-
 
             var->name = strdup(dec->name);
             var->size = var->type->deref_cnt > 0 ? 4 : var->type->size;
@@ -1702,6 +1734,8 @@ void x86_compile_function(x86_state_t* cmp, function_t* fn) {
     ASM(MOVL, x86_reg(ESP), x86_reg(EBP))
     ASM(SUBL, x86_number(0), x86_reg(ESP))
 
+    int stack_off = 0;
+
     for ( int i = 0; i < fn->len; i++ ) {
         x86_type_t* type = x86_type(cmp, fn->args[i]->type);
 
@@ -1710,8 +1744,13 @@ void x86_compile_function(x86_state_t* cmp, function_t* fn) {
             goto error;
         }
 
-        x86_variable_t* var = (x86_variable_t*) malloc(sizeof(x86_variable_t));
         cmp->curr_off -= type->size;
+
+        if ( type->is_struct ) {
+            cmp->curr_off = -((-cmp->curr_off + 15) & ~15);
+        }
+
+        x86_variable_t* var = (x86_variable_t*) malloc(sizeof(x86_variable_t));
 
         var->name = strdup(fn->args[i]->name);
 
@@ -1725,8 +1764,24 @@ void x86_compile_function(x86_state_t* cmp, function_t* fn) {
         var->size = type->size;
         var->type = type;
 
-        ASM(MOV, x86_offset_reg(EBP, 4 + ((i + 1) * type->size)), x86_reg(EAX))
-        ASM(MOV, x86_reg(EAX), x86_offset_reg(EBP, cmp->curr_off))
+        if ( var->type->prim == prim_struct && var->type->deref_cnt == 0 ) {
+            x86_struct_t* struc = cmp->structs[var->type->struct_ind];
+            x86_type_t* type = var->type;
+
+            for ( int j = struc->arg_cnt - 1; j >= 0; j-- ) {
+                int off = cmp->structs[type->struct_ind]->args[j]->offset + var->offset;
+                x86_type_t* ret = cmp->structs[type->struct_ind]->args[j]->type;
+                ASM(MOV, x86_offset_reg(EBP, 4 + ((stack_off + 1) *  cmp->structs[type->struct_ind]->args[j]->type->size)), x86_reg(EAX))
+                ASM(MOV, x86_reg(EAX), x86_offset_reg(EBP, off))
+                stack_off += 1;
+            }
+        }
+        else {
+            ASM(MOV, x86_offset_reg(EBP, 4 + ((stack_off + 1) * type->size)), x86_reg(EAX))
+            ASM(MOV, x86_reg(EAX), x86_offset_reg(EBP, cmp->curr_off))
+
+            stack_off += 1;
+        }
 
         ADD_ARG(cmp->variables, cmp->variable_cnt, cmp->variable_alloc, var, {
             free(var);

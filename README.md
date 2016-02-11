@@ -29,7 +29,7 @@ I guess works but is a bit of a hack.
     void parser_read(parser_state_t* parser);
 
 ## Compiler
-This is next.
+Currently working on the x86 platform.
 
 ## Assembler
 Then this.
@@ -38,7 +38,10 @@ Then this.
 UUUUUUUUGH
 
 ## Building
-    gcc lexer.c parser.c tester.c
+    mkdir build
+    bfg9000 . build
+    cd build
+    make
 
 ## Pull Requests
 If you some how have managed to obtain so much time you can waste as to want to contribute to this project, please run
